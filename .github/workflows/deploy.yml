@@ -25,11 +25,9 @@ jobs:
 
       - run: npm ci
 
-      - name: Build
-        # Served from /<repo>/ on github.io, so assets need that prefix.
-        env:
-          BASE_PATH: /${{ github.event.repository.name }}/
-        run: npm run build
+      # Assets are referenced relatively (see vite.config.ts), so one build
+      # serves from github.io/<repo>/ and from any CDN mirror of this branch.
+      - run: npm run build
 
       - name: SPA fallback and Jekyll opt-out
         # Pages has no rewrite rules, so 404.html covers deep links once
