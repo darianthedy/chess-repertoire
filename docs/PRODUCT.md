@@ -134,7 +134,7 @@ Node {
 Move {
   san: string              // "Nf3"
   isMine: boolean          // my repertoire move vs. an opponent option
-  note: string             // the "why" — required for isMine moves
+  note: string             // the "why" — always optional, often empty
   leadsTo: fen
 }
 ```
@@ -156,10 +156,23 @@ Card {
 }
 ```
 
-**Design decision:** the "why" note is a first-class required field on my own
-moves, not optional metadata. A move without a reason evaporates under pressure.
-The app should refuse to let me save a repertoire move with an empty note — mild
-friction at authoring time, large payoff at recall time.
+**Design decision — notes are optional everywhere.**
+*(Revised. Originally the note was a required field on my own moves, on the
+theory that a move without a reason evaporates under pressure. That reasoning
+still holds for recall, but it was the wrong thing to enforce: entering a
+repertoire means adding hundreds of moves, and a mandatory field on every one of
+them is a tax on the bulk-entry path rather than a nudge toward better notes. A
+blocked save doesn't produce a thoughtful annotation, it produces a junk one.)*
+
+Notes stay first-class in the UI — prompted with a placeholder, editable at any
+time, and surfaced during drilling — but never block adding a move. The intended
+workflow is to enter lines fast, then annotate the moves that actually turn out
+to be confusing.
+
+**Consequence: adding a move takes no confirmation step.** With nothing required,
+a form between playing a move and storing it would be friction with nothing
+behind it. Playing a legal move on the board adds it and walks into it;
+annotation and deletion both happen afterwards from the continuations list.
 
 ## 6. Features (v1)
 
@@ -174,9 +187,12 @@ in Lichess.*
 ### F2 — Tree editor
 - Board + move list side by side.
 - Click through the tree; play a move on the board to add a new line.
-- Mark each move as **mine** or **opponent's**.
-- Note field per move, required on my moves.
-- Delete a subtree.
+- Whether a move is **mine** or the **opponent's** is derived from the side to
+  move, never asked. Making it a toggle would only create a way to get it wrong.
+- Optional note field per move, editable at any time.
+- Delete a move, pruning by reachability from the root rather than deleting the
+  subtree outright — with transpositions, a position under a deleted move may
+  still be reachable another way and must survive.
 - Show, per node, how many of my games reached it (see F5) once data exists.
 
 ### F3 — Drill mode
@@ -411,8 +427,8 @@ games to be worth anything.
 - [ ] Multiple valid moves in one position (a "you may play either") — support,
       or force one choice? *Lean: force one choice in v1. Ambiguity is the enemy
       of drilling.*
-- [ ] Do I need the note field on opponent moves too (e.g. "this is the critical
-      test")? *Lean: optional there, required on mine.*
+- [x] ~~Do I need the note field on opponent moves too?~~ **Yes, and notes are
+      optional on both sides** — see the revised decision in §5.
 - [x] ~~What rating band + time control do I filter the explorer to?~~
       **1000 rapid on chess.com** → filter the Lichess explorer to the
       **1200–1600** bands, rapid + blitz (Lichess ratings run materially higher

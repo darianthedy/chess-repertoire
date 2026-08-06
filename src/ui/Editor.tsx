@@ -22,8 +22,6 @@ interface Props {
 
 export function Editor({ rep, onChange, onBack }: Props) {
   const [path, setPath] = useState<PathStep[]>([]);
-  /** A legal move played on the board that isn't in the tree yet. */
-  const [pending, setPending] = useState<{ san: string } | null>(null);
   const [draftNote, setDraftNote] = useState('');
   const [editingSan, setEditingSan] = useState<string | null>(null);
 
@@ -33,40 +31,33 @@ export function Editor({ rep, onChange, onBack }: Props) {
 
   const navigateTo = useCallback((steps: PathStep[]) => {
     setPath(steps);
-    setPending(null);
     setDraftNote('');
     setEditingSan(null);
   }, []);
 
+  /**
+   * Playing a move adds it and walks into it, with no confirmation step.
+   *
+   * Notes are optional, so a form gating every move would be friction with
+   * nothing behind it — and entering a repertoire means doing this hundreds of
+   * times. Annotate afterwards from the continuations list; remove a mistake
+   * with the ✕ there.
+   */
   const handleMove = useCallback(
     (san: string): boolean => {
       const existing = node.moves.find((m) => m.san === san);
       if (existing) {
-        // Already in the tree — just walk into it.
         navigateTo([...path, { san, fen: existing.to }]);
         return true;
       }
       const to = tryMove(fen, san);
       if (!to) return false;
-      setPending({ san });
-      setDraftNote('');
+      onChange((r) => addMove(r, fen, san, ''));
+      navigateTo([...path, { san, fen: to }]);
       return true;
     },
-    [fen, navigateTo, node.moves, path],
+    [fen, navigateTo, node.moves, onChange, path],
   );
-
-  const commitPending = useCallback(() => {
-    if (!pending) return;
-    const to = tryMove(fen, pending.san);
-    if (!to) return;
-    onChange((r) => addMove(r, fen, pending.san, draftNote.trim()));
-    navigateTo([...path, { san: pending.san, fen: to }]);
-  }, [draftNote, fen, navigateTo, onChange, path, pending]);
-
-  // A note is required on my own moves: a move without a reason evaporates
-  // under pressure. Opponent moves don't need one.
-  const noteRequired = myTurn;
-  const canCommit = !noteRequired || draftNote.trim().length > 0;
 
   const pairs = useMemo(() => groupIntoPairs(path), [path]);
 
@@ -140,51 +131,7 @@ export function Editor({ rep, onChange, onBack }: Props) {
             )}
           </section>
 
-          {pending ? (
-            <section className="card card--accent">
-              <h2>
-                Add {pending.san}
-                <span className="muted"> · {myTurn ? 'my move' : "opponent's"}</span>
-              </h2>
-              <label className="field">
-                <span>
-                  Why this move?{' '}
-                  {noteRequired ? (
-                    <span className="req">required</span>
-                  ) : (
-                    <span className="muted">optional</span>
-                  )}
-                </span>
-                <textarea
-                  value={draftNote}
-                  autoFocus
-                  rows={3}
-                  placeholder={
-                    myTurn
-                      ? 'e.g. stops Bg4, keeps e5 available'
-                      : 'e.g. the critical test'
-                  }
-                  onChange={(e) => setDraftNote(e.target.value)}
-                />
-              </label>
-              <div className="row">
-                <button
-                  className="primary"
-                  onClick={commitPending}
-                  disabled={!canCommit}
-                >
-                  Add move
-                </button>
-                <button onClick={() => setPending(null)}>Cancel</button>
-              </div>
-              {!canCommit && (
-                <p className="small muted">
-                  Your own moves need a reason — it's what makes them stick.
-                </p>
-              )}
-            </section>
-          ) : (
-            <section className="card">
+          <section className="card">
               <h2>
                 Continuations
                 <span className="muted">
@@ -241,7 +188,13 @@ export function Editor({ rep, onChange, onBack }: Props) {
                         <div className="moves__edit">
                           <textarea
                             rows={2}
+                            autoFocus
                             value={draftNote}
+                            placeholder={
+                              m.isMine
+                                ? 'Why this move? e.g. stops Bg4, keeps e5 available'
+                                : 'e.g. the critical test'
+                            }
                             onChange={(e) => setDraftNote(e.target.value)}
                           />
                           <div className="row">
@@ -268,8 +221,7 @@ export function Editor({ rep, onChange, onBack }: Props) {
                   ))}
                 </ul>
               )}
-            </section>
-          )}
+          </section>
 
           {node.moves.length === 0 && path.length > 0 && (
             <section className="card">
