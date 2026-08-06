@@ -1,0 +1,101 @@
+import { get, set } from 'idb-keyval';
+import { initialState } from './seed';
+import { emptyNodes } from './tree';
+import type { AppState, Repertoire } from './types';
+
+const KEY = 'chess-repertoire:state:v1';
+
+export async function loadState(): Promise<AppState> {
+  try {
+    const raw = await get<unknown>(KEY);
+    if (!raw) return initialState();
+    return parseState(raw);
+  } catch {
+    // A corrupt or unreadable store must not brick the app. Worst case the
+    // user re-imports their last JSON export.
+    return initialState();
+  }
+}
+
+export async function saveState(state: AppState): Promise<void> {
+  await set(KEY, state);
+}
+
+/**
+ * Validate an unknown blob into AppState.
+ *
+ * Deliberately lenient about extra fields and strict about structure: this is
+ * the entry point for hand-edited and older exports, and silently accepting a
+ * malformed tree would corrupt the store rather than fail loudly.
+ */
+export function parseState(raw: unknown): AppState {
+  if (typeof raw !== 'object' || raw === null) {
+    throw new Error('Not an object');
+  }
+  const obj = raw as Record<string, unknown>;
+
+  if (!Array.isArray(obj.slots) || !Array.isArray(obj.repertoires)) {
+    throw new Error('Missing slots or repertoires');
+  }
+
+  const slots = obj.slots.map((s, i) => {
+    const o = s as Record<string, unknown>;
+    if (typeof o?.id !== 'string' || typeof o?.name !== 'string') {
+      throw new Error(`Bad slot at index ${i}`);
+    }
+    return {
+      id: o.id,
+      name: o.name,
+      order: typeof o.order === 'number' ? o.order : i,
+    };
+  });
+
+  const repertoires = obj.repertoires.map((r, i) => parseRepertoire(r, i));
+
+  return { version: 1, slots, repertoires };
+}
+
+function parseRepertoire(raw: unknown, index: number): Repertoire {
+  const o = raw as Record<string, unknown>;
+  if (typeof o?.id !== 'string' || typeof o?.name !== 'string') {
+    throw new Error(`Bad repertoire at index ${index}`);
+  }
+
+  const nodes =
+    typeof o.nodes === 'object' && o.nodes !== null
+      ? (o.nodes as Repertoire['nodes'])
+      : emptyNodes();
+
+  return {
+    id: o.id,
+    slotId: typeof o.slotId === 'string' ? o.slotId : '',
+    name: o.name,
+    side: o.side === 'b' ? 'b' : 'w',
+    state:
+      o.state === 'primary' ||
+      o.state === 'trial' ||
+      o.state === 'parked' ||
+      o.state === 'active'
+        ? o.state
+        : 'active',
+    activeDepth: typeof o.activeDepth === 'number' ? o.activeDepth : 8,
+    createdAt: typeof o.createdAt === 'number' ? o.createdAt : Date.now(),
+    nodes,
+  };
+}
+
+export function exportJson(state: AppState): string {
+  return JSON.stringify(state, null, 2);
+}
+
+/** Trigger a download of the current state as a timestamped JSON file. */
+export function downloadJson(state: AppState): void {
+  const stamp = new Date().toISOString().slice(0, 10);
+  const blob = new Blob([exportJson(state)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `chess-repertoire-${stamp}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
