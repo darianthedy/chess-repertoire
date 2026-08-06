@@ -52,7 +52,20 @@ export function parseState(raw: unknown): AppState {
 
   const repertoires = obj.repertoires.map((r, i) => parseRepertoire(r, i));
 
-  return { version: 1, slots, repertoires };
+  // Cards and streak arrived in Phase 2; exports predating it load with an
+  // empty review history rather than failing.
+  const cards =
+    typeof obj.cards === 'object' && obj.cards !== null
+      ? (obj.cards as AppState['cards'])
+      : {};
+
+  const s = obj.streak as Record<string, unknown> | undefined;
+  const streak =
+    s && typeof s.count === 'number' && typeof s.lastDate === 'string'
+      ? { count: s.count, lastDate: s.lastDate }
+      : null;
+
+  return { version: 1, slots, repertoires, cards, streak };
 }
 
 function parseRepertoire(raw: unknown, index: number): Repertoire {

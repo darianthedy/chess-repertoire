@@ -8,8 +8,9 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "check": "tsx scripts/tree-check.ts",
-    "check:mobile": "node scripts/mobile-check.mjs"
+    "check": "tsx scripts/tree-check.ts && tsx scripts/drill-check.ts",
+    "check:mobile": "node scripts/mobile-check.mjs",
+    "check:e2e": "node scripts/e2e-drill.mjs"
   },
   "dependencies": {
     "chess.js": "^1.4.0",

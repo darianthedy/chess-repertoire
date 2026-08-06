@@ -23,7 +23,13 @@ export function defaultSideForSlot(slotId: string): Side {
 }
 
 export function initialState(): AppState {
-  return { version: 1, slots: DEFAULT_SLOTS, repertoires: [] };
+  return {
+    version: 1,
+    slots: DEFAULT_SLOTS,
+    repertoires: [],
+    cards: {},
+    streak: null,
+  };
 }
 
 export function makeRepertoire(

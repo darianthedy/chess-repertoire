@@ -64,8 +64,26 @@ export interface Repertoire {
   nodes: Record<string, TreeNode>;
 }
 
+/** SM-2 state for one drillable position. */
+export interface CardState {
+  ease: number;
+  /** Days until the next review. */
+  interval: number;
+  reps: number;
+  dueAt: number;
+  lapses: number;
+}
+
 export interface AppState {
   version: 1;
   slots: Slot[];
   repertoires: Repertoire[];
+  /**
+   * Scheduling state, keyed `${repertoireId}:${fen}`. Kept outside the tree so
+   * editing a repertoire never disturbs review history, and so a position with
+   * no entry here is simply "new".
+   */
+  cards: Record<string, CardState>;
+  /** Consecutive days with a completed session. */
+  streak: { count: number; lastDate: string } | null;
 }

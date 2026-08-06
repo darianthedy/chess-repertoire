@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { defaultSideForSlot, makeRepertoire } from '../model/seed';
+import { dueCount } from '../model/lines';
 import { downloadJson, parseState } from '../model/storage';
 import { myPositionCount, positionCount } from '../model/tree';
 import type { AppState, Repertoire, RepertoireState, Side } from '../model/types';
@@ -8,11 +9,18 @@ interface Props {
   state: AppState;
   setState: React.Dispatch<React.SetStateAction<AppState | null>>;
   onOpen: (id: string) => void;
+  onStartSession: () => void;
 }
 
 const STATES: RepertoireState[] = ['primary', 'active', 'trial', 'parked'];
 
-export function RepertoireList({ state, setState, onOpen }: Props) {
+export function RepertoireList({
+  state,
+  setState,
+  onOpen,
+  onStartSession,
+}: Props) {
+  const due = dueCount(state, Date.now());
   const [addingTo, setAddingTo] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [side, setSide] = useState<Side>('w');
@@ -74,9 +82,12 @@ export function RepertoireList({ state, setState, onOpen }: Props) {
       <header className="home__head">
         <div>
           <h1>Chess Repertoire</h1>
-          <p className="muted small">
-            Storage depth is unlimited. The drill window is separate.
-          </p>
+          {state.streak && state.streak.count > 0 && (
+            <p className="muted small">
+              {state.streak.count} day streak · last drilled{' '}
+              {state.streak.lastDate}
+            </p>
+          )}
         </div>
         <div className="row">
           <button onClick={() => downloadJson(state)}>Export JSON</button>
@@ -96,6 +107,18 @@ export function RepertoireList({ state, setState, onOpen }: Props) {
       </header>
 
       {importError && <p className="error">Import failed: {importError}</p>}
+
+      {/* The one number that matters. No dashboards — the question is only
+          ever "did I do it today". */}
+      <section className="today">
+        <div>
+          <strong className="today__count">{due}</strong>
+          <span className="muted small"> due today</span>
+        </div>
+        <button className="primary" onClick={onStartSession} disabled={!due}>
+          {due ? 'Start drilling' : 'Nothing due'}
+        </button>
+      </section>
 
       {slots.map((slot) => {
         const reps = state.repertoires.filter((r) => r.slotId === slot.id);
