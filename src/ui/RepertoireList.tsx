@@ -10,6 +10,7 @@ interface Props {
   setState: React.Dispatch<React.SetStateAction<AppState | null>>;
   onOpen: (id: string) => void;
   onStartSession: () => void;
+  onReviewGames: () => void;
 }
 
 const STATES: RepertoireState[] = ['primary', 'active', 'trial', 'parked'];
@@ -19,6 +20,7 @@ export function RepertoireList({
   setState,
   onOpen,
   onStartSession,
+  onReviewGames,
 }: Props) {
   const due = dueCount(state, Date.now());
   const [addingTo, setAddingTo] = useState<string | null>(null);
@@ -115,9 +117,12 @@ export function RepertoireList({
           <strong className="today__count">{due}</strong>
           <span className="muted small"> due today</span>
         </div>
-        <button className="primary" onClick={onStartSession} disabled={!due}>
-          {due ? 'Start drilling' : 'Nothing due'}
-        </button>
+        <div className="row">
+          <button onClick={onReviewGames}>Review games</button>
+          <button className="primary" onClick={onStartSession} disabled={!due}>
+            {due ? 'Start drilling' : 'Nothing due'}
+          </button>
+        </div>
       </section>
 
       {slots.map((slot) => {

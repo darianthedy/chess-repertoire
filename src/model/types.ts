@@ -86,4 +86,6 @@ export interface AppState {
   cards: Record<string, CardState>;
   /** Consecutive days with a completed session. */
   streak: { count: number; lastDate: string } | null;
+  /** Chess.com handle, remembered so game review is one click. */
+  chesscomUsername?: string;
 }

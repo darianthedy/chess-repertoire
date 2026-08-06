@@ -2,29 +2,33 @@ import { useCallback, useState } from 'react';
 import { buildSession } from './model/lines';
 import type { DrillLine } from './model/lines';
 import { bumpStreak } from './model/srs';
+import type { PathStep } from './model/tree';
 import { useAppState } from './useAppState';
 import { applyGrade, Drill } from './ui/Drill';
 import { Editor } from './ui/Editor';
+import { Games } from './ui/Games';
 import { RepertoireList } from './ui/RepertoireList';
 import './App.css';
 
+type View =
+  | { name: 'list' }
+  | { name: 'editor'; repertoireId: string; path?: PathStep[] }
+  | { name: 'games' }
+  | { name: 'drill'; lines: DrillLine[] };
+
 /**
- * Phase 2 — drilling.
- *
- * Three screens, no router: the repertoire list, the tree editor, and a drill
- * session. Deep links aren't wanted here (a puzzle shouldn't be shareable or
- * resumable by URL), so a mode flag is enough.
+ * Four screens, no router. Deep links aren't wanted (a puzzle shouldn't be
+ * resumable by URL), so a view union is enough and keeps Pages hosting simple.
  */
 export default function App() {
   const { state, setState, updateRepertoire } = useAppState();
-  const [openId, setOpenId] = useState<string | null>(null);
-  const [session, setSession] = useState<DrillLine[] | null>(null);
+  const [view, setView] = useState<View>({ name: 'list' });
 
   const onChange = useCallback(
     (fn: Parameters<typeof updateRepertoire>[1]) => {
-      if (openId) updateRepertoire(openId, fn);
+      if (view.name === 'editor') updateRepertoire(view.repertoireId, fn);
     },
-    [openId, updateRepertoire],
+    [updateRepertoire, view],
   );
 
   const onGrade = useCallback(
@@ -39,14 +43,14 @@ export default function App() {
   const startSession = useCallback(() => {
     if (!state) return;
     const lines = buildSession(state, Date.now());
-    if (lines.length) setSession(lines);
+    if (lines.length) setView({ name: 'drill', lines });
   }, [state]);
 
   const endSession = useCallback(() => {
-    // The streak counts a day on which a session was actually run, whether or
-    // not the queue was emptied — showing up is the habit being tracked.
+    // The streak counts a day a session was run, whether or not the queue was
+    // emptied — showing up is the habit being tracked.
     setState((s) => (s ? { ...s, streak: bumpStreak(s.streak, Date.now()) } : s));
-    setSession(null);
+    setView({ name: 'list' });
   }, [setState]);
 
   if (!state) {
@@ -57,12 +61,12 @@ export default function App() {
     );
   }
 
-  if (session) {
+  if (view.name === 'drill') {
     return (
       <main className="app">
         <Drill
           state={state}
-          lines={session}
+          lines={view.lines}
           onGrade={onGrade}
           onDone={endSession}
         />
@@ -70,20 +74,47 @@ export default function App() {
     );
   }
 
-  const open = state.repertoires.find((r) => r.id === openId) ?? null;
+  if (view.name === 'games') {
+    return (
+      <main className="app">
+        <Games
+          state={state}
+          setState={setState}
+          onFix={(repertoireId, path) =>
+            setView({ name: 'editor', repertoireId, path })
+          }
+          onBack={() => setView({ name: 'list' })}
+        />
+      </main>
+    );
+  }
+
+  if (view.name === 'editor') {
+    const rep = state.repertoires.find((r) => r.id === view.repertoireId);
+    if (rep) {
+      return (
+        <main className="app">
+          <Editor
+            key={rep.id + (view.path?.length ?? 0)}
+            rep={rep}
+            initialPath={view.path}
+            onChange={onChange}
+            onBack={() => setView({ name: 'list' })}
+          />
+        </main>
+      );
+    }
+  }
 
   return (
     <main className="app">
-      {open ? (
-        <Editor rep={open} onChange={onChange} onBack={() => setOpenId(null)} />
-      ) : (
-        <RepertoireList
-          state={state}
-          setState={setState}
-          onOpen={setOpenId}
-          onStartSession={startSession}
-        />
-      )}
+      <RepertoireList
+        state={state}
+        setState={setState}
+        onOpen={(repertoireId) => setView({ name: 'editor', repertoireId })}
+        onStartSession={startSession}
+        onReviewGames={() => setView({ name: 'games' })}
+      />
     </main>
   );
 }

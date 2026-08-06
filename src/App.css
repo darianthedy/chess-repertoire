@@ -357,6 +357,61 @@ textarea {
   color: var(--text);
 }
 
+/* ---------- games / gaps ---------- */
+
+.games {
+  max-width: 640px;
+  margin: 0 auto;
+}
+.gaps {
+  margin-top: 1.25rem;
+}
+.gaps__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.gap {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.7rem 0.85rem;
+}
+.gap__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.gap__line {
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.gap__count {
+  font-size: 0.72rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+.gap__what {
+  margin: 0.35rem 0 0.6rem;
+  font-size: 0.9rem;
+}
+.gap__meta {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.gap__meta button {
+  margin-left: auto;
+}
+
 /* ---------- drill ---------- */
 
 .drill {

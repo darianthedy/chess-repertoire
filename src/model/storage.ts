@@ -65,7 +65,10 @@ export function parseState(raw: unknown): AppState {
       ? { count: s.count, lastDate: s.lastDate }
       : null;
 
-  return { version: 1, slots, repertoires, cards, streak };
+  const chesscomUsername =
+    typeof obj.chesscomUsername === 'string' ? obj.chesscomUsername : undefined;
+
+  return { version: 1, slots, repertoires, cards, streak, chesscomUsername };
 }
 
 function parseRepertoire(raw: unknown, index: number): Repertoire {

@@ -20,10 +20,12 @@ interface Props {
   rep: Repertoire;
   onChange: (fn: (rep: Repertoire) => Repertoire) => void;
   onBack: () => void;
+  /** Open directly at a position — used when fixing a gap found in a game. */
+  initialPath?: PathStep[];
 }
 
-export function Editor({ rep, onChange, onBack }: Props) {
-  const [path, setPath] = useState<PathStep[]>([]);
+export function Editor({ rep, onChange, onBack, initialPath }: Props) {
+  const [path, setPath] = useState<PathStep[]>(initialPath ?? []);
   const [draftNote, setDraftNote] = useState('');
   const [editingSan, setEditingSan] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
