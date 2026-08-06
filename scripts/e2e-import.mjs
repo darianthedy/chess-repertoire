@@ -82,6 +82,38 @@ check('re-import adds nothing', msg2.includes('Added 0 moves'), `"${msg2}"`);
 const positionsAfter = (await page.locator('.editor__title').textContent()).match(/(\d+) positions/)[1];
 check('tree size unchanged by re-import', positionsBefore === positionsAfter, `${positionsBefore} -> ${positionsAfter}`);
 
+// --- upload a repertoire file ----------------------------------------------
+await page.locator('.import input[type=file]').setInputFiles({
+  name: 'repertoire.pgn',
+  mimeType: 'application/x-chess-pgn',
+  buffer: Buffer.from('1. d4 d5 2. Nf3 Nf6 3. Bf4 Bf5\n'),
+});
+await page.waitForSelector('.import p.small', { timeout: 10000 });
+const uploadMsg = await page.locator('.import p.small').last().textContent();
+check('uploading a .pgn file imports it', uploadMsg.includes('Added 1 move'), `"${uploadMsg}"`);
+
+// --- a chess.com game export must be refused --------------------------------
+const CC_GAMES = `[Event "Live Chess"]
+[Site "Chess.com"]
+[White "someone"]
+[Black "rival"]
+[Result "1-0"]
+[WhiteElo "1000"]
+[TimeControl "600"]
+[Termination "someone won"]
+
+1. e4 {[%clk 0:09:59]} e5 {[%clk 0:09:58]} 2. Nf3 1-0`;
+
+await page.locator('.import textarea').fill(CC_GAMES);
+await page.getByRole('button', { name: 'Import PGN' }).click();
+await page.waitForSelector('.import p.error', { timeout: 10000 });
+const guard = await page.locator('.import p.error').textContent();
+check('game exports are refused, not silently imported', guard.includes('played games'), `"${guard.slice(0, 80)}…"`);
+check('refusal points at the right screen', guard.includes('Review games'));
+
+const rootAfterGuard = await page.locator('.moves__san').allTextContents();
+check('refused import left the tree untouched', rootAfterGuard.join(' ') === 'd4', `[${rootAfterGuard.join(' ')}]`);
+
 // --- imported lines are immediately drillable ------------------------------
 await page.getByRole('button', { name: 'Close' }).click();
 await page.getByRole('button', { name: '← All repertoires' }).click();

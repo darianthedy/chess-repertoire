@@ -7,6 +7,8 @@
  * resembling a Lichess study, so it is a source of *games*, not repertoires.
  */
 
+import { splitGamesWithHeaders } from './pgn';
+
 export interface CcGame {
   url: string;
   pgn: string;
@@ -90,6 +92,28 @@ interface RawGame {
   end_time?: number;
   white?: { username?: string };
   black?: { username?: string };
+}
+
+/**
+ * Build game records from a downloaded PGN file, so games can be reviewed
+ * without the API — useful for archives older than the two months fetched, or
+ * when offline.
+ */
+export function gamesFromPgn(pgn: string): CcGame[] {
+  return splitGamesWithHeaders(pgn)
+    .filter((g) => !g.headers.Variant || g.headers.Variant === 'Standard')
+    .map((g, i) => ({
+      url: g.headers.Link ?? g.headers.Site ?? '',
+      // Re-emit just the tags the walker needs, plus the movetext.
+      pgn: `[White "${g.headers.White ?? ''}"]\n[Black "${g.headers.Black ?? ''}"]\n\n${g.movetext}`,
+      timeClass: g.headers.TimeControl ?? '',
+      rules: 'chess',
+      white: g.headers.White ?? '',
+      black: g.headers.Black ?? '',
+      // Files are usually chronological; preserve order without a real date.
+      endTime: i,
+    }))
+    .reverse();
 }
 
 /** Which side the given player had, or null if they weren't in the game. */

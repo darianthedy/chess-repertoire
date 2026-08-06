@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { ROOT_FEN } from '../model/fen';
-import { fetchStudyPgn, importPgn } from '../model/pgn';
+import { fetchStudyPgn, importPgn, looksLikeGames } from '../model/pgn';
 import type { ImportResult } from '../model/pgn';
 import {
   addMove,
@@ -83,16 +83,43 @@ export function Editor({ rep, onChange, onBack, initialPath }: Props) {
     setPath([]);
   }, [onChange]);
 
-  const doImportText = useCallback(() => {
-    setImportErr(null);
-    setImportMsg(null);
-    try {
-      report(importPgn(rep, pgnText, ROOT_FEN));
-      setPgnText('');
-    } catch (e) {
-      setImportErr(e instanceof Error ? e.message : 'Could not parse that PGN');
-    }
-  }, [pgnText, rep, report]);
+  const runImport = useCallback(
+    (text: string, onDone: () => void) => {
+      setImportErr(null);
+      setImportMsg(null);
+
+      // Games and repertoires are both PGN but mean opposite things. Importing
+      // games would add every move both players made — including the opponent's
+      // openings from games played with the other colour — so refuse and point
+      // at the screen that does the right thing with them.
+      if (looksLikeGames(text)) {
+        setImportErr(
+          'That looks like played games, not a repertoire. Importing it would add your opponents’ moves as your own. Use "Review games" on the home screen instead — it compares games against this repertoire and shows where they left book.',
+        );
+        return;
+      }
+
+      try {
+        report(importPgn(rep, text, ROOT_FEN));
+        onDone();
+      } catch (e) {
+        setImportErr(e instanceof Error ? e.message : 'Could not parse that PGN');
+      }
+    },
+    [rep, report],
+  );
+
+  const doImportText = useCallback(
+    () => runImport(pgnText, () => setPgnText('')),
+    [pgnText, runImport],
+  );
+
+  const doImportFile = useCallback(
+    async (file: File) => {
+      runImport(await file.text(), () => {});
+    },
+    [runImport],
+  );
 
   const doImportStudy = useCallback(async () => {
     setImportErr(null);
@@ -152,6 +179,19 @@ export function Editor({ rep, onChange, onBack, initialPath }: Props) {
                 {busy ? 'Fetching…' : 'Fetch'}
               </button>
             </div>
+          </label>
+
+          <label className="field">
+            <span>…or upload a .pgn file</span>
+            <input
+              type="file"
+              accept=".pgn,application/x-chess-pgn,text/plain"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void doImportFile(f);
+                e.target.value = '';
+              }}
+            />
           </label>
 
           <label className="field">

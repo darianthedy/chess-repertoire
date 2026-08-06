@@ -94,5 +94,65 @@ check('study id from chapter URL', studyId('https://lichess.org/study/abcd1234/x
 check('study id from bare id', studyId('abcd1234') === 'abcd1234');
 check('non-study input rejected', studyId('https://example.com') === null);
 
+// ------------------------------------------- chess.com download handling ---
+import { gamesFromPgn } from '../src/model/chesscom';
+import { looksLikeGames, splitGamesWithHeaders } from '../src/model/pgn';
+
+const CC_DOWNLOAD = `[Event "Live Chess"]
+[Site "Chess.com"]
+[White "darianthedy"]
+[Black "rival"]
+[Result "1-0"]
+[WhiteElo "1000"]
+[TimeControl "600"]
+[Termination "darianthedy won"]
+[Link "https://www.chess.com/game/live/1"]
+
+1. d4 {[%clk 0:09:59.9]} 1... d5 {[%clk 0:09:58.1]} 2. Nf3 {[%clk 0:09:55]} 1-0
+
+[Event "Live Chess"]
+[Site "Chess.com"]
+[White "rival2"]
+[Black "darianthedy"]
+[Result "0-1"]
+[BlackElo "1010"]
+[TimeControl "600"]
+[Termination "darianthedy won"]
+
+1. e4 {[%clk 0:09:59]} 1... c6 {[%clk 0:09:58]} 0-1`;
+
+check('headers parsed per game', splitGamesWithHeaders(CC_DOWNLOAD)[0].headers.White === 'darianthedy');
+check('multi-line movetext joined', splitGamesWithHeaders(CC_DOWNLOAD).length === 2);
+
+// Clock annotations must not survive as notes.
+let clocked = makeRepertoire('slot-white', 'X', 'w');
+clocked = importPgn(clocked, '1. d4 {[%clk 0:09:59.9]} d5 {[%clk 0:09:58]}', ROOT_FEN).rep;
+check(
+  'clock comments do not become notes',
+  getNode(clocked, ROOT_FEN).moves[0].note === '',
+  `"${getNode(clocked, ROOT_FEN).moves[0].note}"`,
+);
+
+// A real comment alongside a clock is kept.
+let mixed = makeRepertoire('slot-white', 'X', 'w');
+mixed = importPgn(mixed, '1. d4 {[%clk 0:09:59] the London move}', ROOT_FEN).rep;
+check(
+  'real comment survives alongside a clock',
+  getNode(mixed, ROOT_FEN).moves[0].note === 'the London move',
+  `"${getNode(mixed, ROOT_FEN).moves[0].note}"`,
+);
+
+check('a chess.com download is recognised as games', looksLikeGames(CC_DOWNLOAD) === true);
+check(
+  'a repertoire is not mistaken for games',
+  looksLikeGames('[Event "London"]\n[Result "*"]\n\n1. d4 d5 (1... Nf6) 2. Nf3 *') === false,
+);
+check('bare movetext is not mistaken for games', looksLikeGames('1. d4 d5 2. Nf3') === false);
+
+const fromFile = gamesFromPgn(CC_DOWNLOAD);
+check('games extracted from a downloaded file', fromFile.length === 2, `${fromFile.length}`);
+check('player names carried through', fromFile.some((g) => g.white === 'darianthedy'));
+check('game link carried through', fromFile.some((g) => g.url.includes('chess.com/game')));
+
 console.log(failures === 0 ? '\nAll PGN checks passed.' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

@@ -84,7 +84,7 @@ await page.getByRole('button', { name: '← All repertoires' }).click();
 // --- review ------------------------------------------------------------------
 await page.getByRole('button', { name: 'Review games' }).click();
 await page.waitForSelector('.games');
-await page.locator('.games input').fill('testuser');
+await page.locator('.games input:not([type=file])').fill('testuser');
 await page.getByRole('button', { name: 'Review' }).click();
 await page.waitForSelector('.gaps', { timeout: 15000 });
 
@@ -128,11 +128,23 @@ check('gap patched in the tree', after2.join(' ') === 'd4 d5 Nf3 e6 Bf4', `[${af
 await page.getByRole('button', { name: '← All repertoires' }).click();
 await page.getByRole('button', { name: 'Review games' }).click();
 await page.waitForSelector('.games');
-check('username remembered', (await page.locator('.games input').inputValue()) === 'testuser');
+check('username remembered', (await page.locator('.games input:not([type=file])').inputValue()) === 'testuser');
 await page.getByRole('button', { name: 'Review' }).click();
 await page.waitForSelector('.gaps', { timeout: 15000 });
 const after = await page.locator('.gaps h2').textContent();
 check('patched gap no longer reported', after.includes('1 gap'), `"${after}"`);
+
+// --- reviewing a downloaded PGN file, with no API involved -------------------
+const FILE_PGN = GAMES.map((g) => g.pgn).join('\n\n');
+await page.locator('.games input[type=file]').setInputFiles({
+  name: 'chess_com_games.pgn',
+  mimeType: 'application/x-chess-pgn',
+  buffer: Buffer.from(FILE_PGN),
+});
+await page.waitForSelector('.gaps', { timeout: 15000 });
+const fileHeading = await page.locator('.gaps h2').textContent();
+check('a downloaded PGN file is reviewed', fileHeading.includes('4 games scanned'), `"${fileHeading}"`);
+check('the same gap is found from the file', fileHeading.includes('1 gap'), `"${fileHeading}"`);
 
 check('no runtime errors', errors.length === 0, errors.join(' | '));
 

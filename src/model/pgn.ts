@@ -30,29 +30,45 @@ const RESULTS = new Set(['1-0', '0-1', '1/2-1/2', '*']);
  * Lichess exports a study as one game per chapter concatenated together, so a
  * single paste routinely holds a dozen games that all belong in one tree.
  */
-export function splitGames(pgn: string): string[] {
-  const games: string[] = [];
+export interface PgnGame {
+  headers: Record<string, string>;
+  movetext: string;
+}
+
+/** Split a PGN file into games, keeping the header tags. */
+export function splitGamesWithHeaders(pgn: string): PgnGame[] {
+  const games: PgnGame[] = [];
+  let headers: Record<string, string> = {};
   let current: string[] = [];
   let inMovetext = false;
 
+  const flush = () => {
+    const movetext = current.join(' ').trim();
+    if (movetext || Object.keys(headers).length) games.push({ headers, movetext });
+    headers = {};
+    current = [];
+    inMovetext = false;
+  };
+
   for (const line of pgn.split(/\r?\n/)) {
     const trimmed = line.trim();
-    const isHeader = trimmed.startsWith('[') && trimmed.endsWith(']');
+    const header = trimmed.match(/^\[(\w+)\s+"([\s\S]*)"\]$/);
 
-    if (isHeader && inMovetext) {
-      // A header after movetext means the previous game ended.
-      games.push(current.join(' '));
-      current = [];
-      inMovetext = false;
+    if (header && inMovetext) flush();
+    if (header) {
+      headers[header[1]] = header[2];
+      continue;
     }
-    if (isHeader) continue;
     if (trimmed) inMovetext = true;
     current.push(trimmed);
   }
 
-  const last = current.join(' ').trim();
-  if (last) games.push(last);
-  return games.filter((g) => g.trim().length > 0);
+  flush();
+  return games.filter((g) => g.movetext.length > 0);
+}
+
+export function splitGames(pgn: string): string[] {
+  return splitGamesWithHeaders(pgn).map((g) => g.movetext);
 }
 
 function tokenize(movetext: string): Token[] {
@@ -67,7 +83,10 @@ function tokenize(movetext: string): Token[] {
     } else if (ch === '{') {
       const end = movetext.indexOf('}', i);
       const stop = end === -1 ? movetext.length : end;
-      tokens.push({ t: 'comment', v: movetext.slice(i + 1, stop).trim() });
+      const body = stripCommands(movetext.slice(i + 1, stop));
+      // Comments holding only machine annotations carry nothing worth keeping
+      // as a note, so they're dropped rather than stored.
+      if (body) tokens.push({ t: 'comment', v: body });
       i = stop + 1;
     } else if (ch === ';') {
       // Rest-of-line comment.
@@ -99,6 +118,16 @@ function tokenize(movetext: string): Token[] {
     }
   }
   return tokens;
+}
+
+/**
+ * Remove PGN command annotations — `[%clk 0:09:59.9]`, `[%eval -0.3]`,
+ * `[%emt ...]` and friends. Chess.com and Lichess attach a clock to every
+ * single move, and without this every imported move ends up annotated with a
+ * timestamp instead of a reason.
+ */
+function stripCommands(comment: string): string {
+  return comment.replace(/\[%[^\]]*\]/g, '').trim();
 }
 
 /** Drop !/?/!? annotations and the check and mate marks, which SAN matching ignores. */
@@ -220,6 +249,30 @@ export function importPgn(
   }
 
   return { rep: out, ...stats };
+}
+
+/**
+ * Does this PGN look like played games rather than a repertoire?
+ *
+ * Importing games into a repertoire quietly corrupts it: every move both
+ * players made becomes a repertoire move, so a game played as Black adds
+ * White's opening as your own. Games are recognisable by decisive results,
+ * player ratings, and a total absence of variations — a repertoire is mostly
+ * variations, a game has none.
+ */
+export function looksLikeGames(pgn: string): boolean {
+  const games = splitGamesWithHeaders(pgn);
+  if (games.length === 0) return false;
+
+  const gameish = games.filter((g) => {
+    const h = g.headers;
+    const decisive = h.Result === '1-0' || h.Result === '0-1' || h.Result === '1/2-1/2';
+    const played = !!(h.WhiteElo || h.BlackElo || h.TimeControl || h.Termination);
+    const noVariations = !g.movetext.includes('(');
+    return decisive && played && noVariations;
+  });
+
+  return gameish.length === games.length;
 }
 
 /** Pull the study id out of a Lichess URL, or accept a bare id. */

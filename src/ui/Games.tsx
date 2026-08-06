@@ -1,9 +1,21 @@
 import { useCallback, useState } from 'react';
-import { fetchRecentGames } from '../model/chesscom';
+import { fetchRecentGames, gamesFromPgn } from '../model/chesscom';
 import { analyseGames, describePath, groupDeviations } from '../model/deviation';
 import type { DeviationGroup } from '../model/deviation';
 import type { PathStep } from '../model/tree';
 import type { AppState } from '../model/types';
+
+/** The player appearing in every game — almost certainly the file's owner. */
+function commonPlayer(games: { white: string; black: string }[]): string {
+  const counts = new Map<string, number>();
+  for (const g of games) {
+    for (const name of new Set([g.white, g.black])) {
+      if (name) counts.set(name, (counts.get(name) ?? 0) + 1);
+    }
+  }
+  const [best] = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+  return best && best[1] === games.length ? best[0] : '';
+}
 
 interface Props {
   state: AppState;
@@ -43,6 +55,35 @@ export function Games({ state, setState, onFix, onBack }: Props) {
     }
   }, [setState, state.repertoires, username]);
 
+  const reviewFile = useCallback(
+    async (file: File) => {
+      setBusy(true);
+      setError(null);
+      setGroups(null);
+      try {
+        const games = gamesFromPgn(await file.text());
+        if (!games.length) throw new Error('No games found in that file');
+
+        // The file knows the players but not which one is me. Prefer the typed
+        // handle, otherwise take the name common to every game.
+        const handle = username.trim() || commonPlayer(games);
+        if (!handle) {
+          throw new Error(
+            'Enter your chess.com username so I know which side is yours',
+          );
+        }
+        setUsername(handle);
+        setScanned(games.length);
+        setGroups(groupDeviations(analyseGames(state.repertoires, games, handle)));
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Could not read that file');
+      } finally {
+        setBusy(false);
+      }
+    },
+    [state.repertoires, username],
+  );
+
   const repName = (id: string) =>
     state.repertoires.find((r) => r.id === id)?.name ?? 'unknown';
 
@@ -80,6 +121,21 @@ export function Games({ state, setState, onFix, onBack }: Props) {
           Reads your last two months of public games. Nothing is uploaded and no
           login is needed.
         </p>
+
+        <label className="field">
+          <span>…or upload a PGN you downloaded from chess.com</span>
+          <input
+            type="file"
+            accept=".pgn,application/x-chess-pgn,text/plain"
+            disabled={busy}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void reviewFile(f);
+              e.target.value = '';
+            }}
+          />
+        </label>
+
         {error && <p className="error">{error}</p>}
       </section>
 
