@@ -1,10 +1,27 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Chess } from 'chess.js';
+import type { Square } from 'chess.js';
 import { Chessboard } from 'react-chessboard';
-import type { PieceDropHandlerArgs } from 'react-chessboard';
+import type { PieceDropHandlerArgs, SquareHandlerArgs } from 'react-chessboard';
 import './App.css';
 
 type Orientation = 'white' | 'black';
+
+const SELECTED_STYLE: React.CSSProperties = {
+  background: 'rgba(255, 213, 79, 0.55)',
+};
+
+// A dot for quiet moves, a ring for captures — the standard visual grammar,
+// so a capture is distinguishable from a quiet move at a glance.
+const MOVE_DOT_STYLE: React.CSSProperties = {
+  background:
+    'radial-gradient(circle, rgba(20,20,20,0.28) 18%, transparent 20%)',
+};
+
+const CAPTURE_RING_STYLE: React.CSSProperties = {
+  background:
+    'radial-gradient(circle, transparent 54%, rgba(20,20,20,0.28) 56%, rgba(20,20,20,0.28) 66%, transparent 68%)',
+};
 
 /**
  * Phase 0 — skeleton.
@@ -20,8 +37,19 @@ export default function App() {
   const [fen, setFen] = useState(() => new Chess().fen());
   const [history, setHistory] = useState<string[]>([]);
   const [orientation, setOrientation] = useState<Orientation>('white');
+  // Origin square of an in-progress click-to-move. Null when nothing is picked up.
+  const [selected, setSelected] = useState<string | null>(null);
 
   const game = useMemo(() => new Chess(fen), [fen]);
+
+  // Legal destinations from the selected square, keyed by target square so the
+  // click handler can both validate a destination and know if it's a capture.
+  const legalTargets = useMemo(() => {
+    if (!selected) return new Map<string, boolean>();
+    // react-chessboard hands back plain strings; chess.js wants its Square union.
+    const moves = game.moves({ square: selected as Square, verbose: true });
+    return new Map(moves.map((m) => [m.to, m.captured !== undefined]));
+  }, [game, selected]);
 
   const applyMove = useCallback(
     (from: string, to: string): boolean => {
@@ -32,6 +60,7 @@ export default function App() {
         if (!move) return false;
         setFen(next.fen());
         setHistory((h) => [...h, move.san]);
+        setSelected(null);
         return true;
       } catch {
         // chess.js throws on illegal moves rather than returning null.
@@ -43,15 +72,62 @@ export default function App() {
 
   const onPieceDrop = useCallback(
     ({ sourceSquare, targetSquare }: PieceDropHandlerArgs): boolean => {
+      setSelected(null);
       if (!targetSquare) return false;
       return applyMove(sourceSquare, targetSquare);
     },
     [applyMove],
   );
 
+  /**
+   * Click-to-move. Handled entirely on square clicks — pieces sit inside
+   * squares and don't stop propagation, so this fires for empty squares and
+   * occupied ones alike, with `piece` telling them apart.
+   */
+  const onSquareClick = useCallback(
+    ({ piece, square }: SquareHandlerArgs) => {
+      // Whether this square holds a piece belonging to the side to move.
+      const isOwnPiece = piece
+        ? piece.pieceType[0] === game.turn()
+        : false;
+
+      if (!selected) {
+        if (isOwnPiece) setSelected(square);
+        return;
+      }
+
+      if (square === selected) {
+        setSelected(null);
+        return;
+      }
+
+      if (legalTargets.has(square)) {
+        applyMove(selected, square);
+        return;
+      }
+
+      // Clicking another of my own pieces re-targets rather than deselecting,
+      // which is what you want when you change your mind mid-move.
+      setSelected(isOwnPiece ? square : null);
+    },
+    [applyMove, game, legalTargets, selected],
+  );
+
+  const squareStyles = useMemo(() => {
+    if (!selected) return {};
+    const styles: Record<string, React.CSSProperties> = {
+      [selected]: SELECTED_STYLE,
+    };
+    for (const [target, isCapture] of legalTargets) {
+      styles[target] = isCapture ? CAPTURE_RING_STYLE : MOVE_DOT_STYLE;
+    }
+    return styles;
+  }, [legalTargets, selected]);
+
   const reset = useCallback(() => {
     setFen(new Chess().fen());
     setHistory([]);
+    setSelected(null);
   }, []);
 
   const undo = useCallback(() => {
@@ -60,6 +136,7 @@ export default function App() {
     for (const san of remaining) next.move(san);
     setFen(next.fen());
     setHistory(remaining);
+    setSelected(null);
   }, [history]);
 
   const status = game.isCheckmate()
@@ -93,6 +170,8 @@ export default function App() {
               id: 'main-board',
               position: fen,
               onPieceDrop,
+              onSquareClick,
+              squareStyles,
               boardOrientation: orientation,
               animationDurationInMs: 150,
             }}
@@ -104,9 +183,10 @@ export default function App() {
 
           <div className="panel__controls">
             <button
-              onClick={() =>
-                setOrientation((o) => (o === 'white' ? 'black' : 'white'))
-              }
+              onClick={() => {
+                setOrientation((o) => (o === 'white' ? 'black' : 'white'));
+                setSelected(null);
+              }}
             >
               Flip
             </button>
