@@ -86,7 +86,7 @@ export function Editor({ rep, onChange, onBack }: Props) {
           />
           <div className="editor__nav">
             <button onClick={() => navigateTo([])} disabled={!path.length}>
-              ⏮ Start
+              « Start
             </button>
             <button
               onClick={() => navigateTo(path.slice(0, -1))}

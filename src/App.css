@@ -1,5 +1,6 @@
 .app {
   max-width: 1040px;
+  width: 100%;
   margin: 0 auto;
   padding: 1.5rem 1rem 4rem;
 }
@@ -49,6 +50,9 @@ button {
   border-radius: 6px;
   padding: 0.4rem 0.7rem;
   cursor: pointer;
+  /* Suppress double-tap-to-zoom, which otherwise adds a tap delay and fires
+     accidentally when clicking through a line quickly. */
+  touch-action: manipulation;
 }
 button:hover:not(:disabled) {
   border-color: var(--muted);
@@ -97,9 +101,27 @@ textarea {
   border-radius: 6px;
   padding: 0.4rem 0.5rem;
   width: 100%;
+  max-width: 100%;
 }
 textarea {
   resize: vertical;
+}
+
+/*
+ * Touch devices zoom the viewport when focusing a control whose font-size is
+ * under 16px, and never zoom back out — which is what makes a form feel broken
+ * on a phone. 16px is the whole fix.
+ *
+ * Deliberately done here rather than with `maximum-scale=1, user-scalable=no`
+ * on the viewport meta: that also kills pinch-zoom, which is a real
+ * accessibility regression and isn't what's being asked for.
+ */
+@media (pointer: coarse) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
 }
 
 .field {
@@ -225,6 +247,7 @@ textarea {
 }
 .editor__board {
   min-width: 0;
+  max-width: 100%;
 }
 .editor__nav {
   display: flex;

@@ -13,6 +13,9 @@
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Stop iOS inflating text in rotated / narrow layouts. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -29,7 +32,22 @@
   box-sizing: border-box;
 }
 
+html,
 body {
   margin: 0;
   min-height: 100svh;
+  /* Belt and braces against horizontal scroll: nothing in this app should ever
+     be wider than the viewport, and a stray overflow shouldn't let the whole
+     page slide sideways on a phone. */
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* Long notes and opening names must wrap rather than push the layout wide. */
+p,
+h1,
+h2,
+li,
+span {
+  overflow-wrap: break-word;
 }
