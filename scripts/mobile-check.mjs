@@ -73,6 +73,17 @@ for (const vp of VIEWPORTS) {
     `${o.scrollWidth} vs ${o.clientWidth}${o.wide.length ? ' — ' + o.wide.join(', ') : ''}`,
   );
 
+  // --- import panel: an input and a button share a nowrap row ---------------
+  await page.getByRole('button', { name: 'Import' }).click();
+  await page.waitForSelector('.import');
+  o = await overflow(page);
+  report(
+    `${vp.name} import panel: no horizontal overflow`,
+    o.scrollWidth <= o.clientWidth + 1,
+    `${o.scrollWidth} vs ${o.clientWidth}${o.wide.length ? ' — ' + o.wide.join(', ') : ''}`,
+  );
+  await page.getByRole('button', { name: 'Close' }).click();
+
   // --- play a few moves so the line strip and continuations are populated ---
   for (const [from, to] of [
     ['d2', 'd4'],

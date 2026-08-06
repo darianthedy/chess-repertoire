@@ -239,6 +239,16 @@ textarea {
   font-size: 0.9rem;
 }
 
+.import {
+  margin-bottom: 1rem;
+}
+.import .row {
+  flex-wrap: nowrap;
+}
+.import .row button {
+  white-space: nowrap;
+}
+
 .editor__layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 340px;

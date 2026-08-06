@@ -1,5 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { ROOT_FEN } from '../model/fen';
+import { fetchStudyPgn, importPgn } from '../model/pgn';
+import type { ImportResult } from '../model/pgn';
 import {
   addMove,
   deleteMove,
@@ -24,6 +26,12 @@ export function Editor({ rep, onChange, onBack }: Props) {
   const [path, setPath] = useState<PathStep[]>([]);
   const [draftNote, setDraftNote] = useState('');
   const [editingSan, setEditingSan] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [pgnText, setPgnText] = useState('');
+  const [studyUrl, setStudyUrl] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [importMsg, setImportMsg] = useState<string | null>(null);
+  const [importErr, setImportErr] = useState<string | null>(null);
 
   const fen = path.length ? path[path.length - 1].fen : ROOT_FEN;
   const node = getNode(rep, fen);
@@ -61,6 +69,44 @@ export function Editor({ rep, onChange, onBack }: Props) {
 
   const pairs = useMemo(() => groupIntoPairs(path), [path]);
 
+  const report = useCallback((r: ImportResult) => {
+    onChange(() => r.rep);
+    setImportMsg(
+      `Added ${r.added} move${r.added === 1 ? '' : 's'}` +
+        (r.existing ? `, ${r.existing} already present` : '') +
+        (r.rejected ? `, ${r.rejected} could not be played` : ''),
+    );
+    // Jump back to the root: the imported tree is most likely elsewhere, and
+    // leaving the board deep in an unrelated line is disorienting.
+    setPath([]);
+  }, [onChange]);
+
+  const doImportText = useCallback(() => {
+    setImportErr(null);
+    setImportMsg(null);
+    try {
+      report(importPgn(rep, pgnText, ROOT_FEN));
+      setPgnText('');
+    } catch (e) {
+      setImportErr(e instanceof Error ? e.message : 'Could not parse that PGN');
+    }
+  }, [pgnText, rep, report]);
+
+  const doImportStudy = useCallback(async () => {
+    setImportErr(null);
+    setImportMsg(null);
+    setBusy(true);
+    try {
+      const pgn = await fetchStudyPgn(studyUrl);
+      report(importPgn(rep, pgn, ROOT_FEN));
+      setStudyUrl('');
+    } catch (e) {
+      setImportErr(e instanceof Error ? e.message : 'Could not fetch that study');
+    } finally {
+      setBusy(false);
+    }
+  }, [rep, report, studyUrl]);
+
   return (
     <div className="editor">
       <header className="editor__bar">
@@ -75,7 +121,58 @@ export function Editor({ rep, onChange, onBack }: Props) {
             positions
           </span>
         </div>
+        <button onClick={() => setImportOpen((o) => !o)}>
+          {importOpen ? 'Close' : 'Import'}
+        </button>
       </header>
+
+      {importOpen && (
+        <section className="card card--accent import">
+          <h2>Import into this repertoire</h2>
+          <p className="muted small">
+            Merged into the existing tree — nothing is replaced, and notes you've
+            written are kept. Variations and comments are preserved.
+          </p>
+
+          <label className="field">
+            <span>Lichess study URL or id</span>
+            <div className="row">
+              <input
+                value={studyUrl}
+                placeholder="https://lichess.org/study/xxxxxxxx"
+                onChange={(e) => setStudyUrl(e.target.value)}
+              />
+              <button
+                className="primary"
+                onClick={() => void doImportStudy()}
+                disabled={busy || !studyUrl.trim()}
+              >
+                {busy ? 'Fetching…' : 'Fetch'}
+              </button>
+            </div>
+          </label>
+
+          <label className="field">
+            <span>…or paste PGN</span>
+            <textarea
+              rows={5}
+              value={pgnText}
+              placeholder="1. d4 d5 2. Nf3 Nf6 3. Bf4 (3. c4 e6) 3... c5"
+              onChange={(e) => setPgnText(e.target.value)}
+            />
+          </label>
+          <button
+            className="primary"
+            onClick={doImportText}
+            disabled={!pgnText.trim()}
+          >
+            Import PGN
+          </button>
+
+          {importMsg && <p className="small">{importMsg}</p>}
+          {importErr && <p className="error">{importErr}</p>}
+        </section>
+      )}
 
       <div className="editor__layout">
         <div className="editor__board">
