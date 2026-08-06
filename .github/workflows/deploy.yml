@@ -53,3 +53,9 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          # Default is 10 minutes. GitHub's Pages deployment queue has been
+          # sitting at `deployment_queued` for close to that, so builds were
+          # being cancelled mid-queue rather than actually failing. Waiting
+          # longer costs nothing — the job is idle while it polls.
+          timeout: 1800000
