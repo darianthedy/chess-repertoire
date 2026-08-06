@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Geometric pawn on a board-square ground. Drawn as paths rather than a
+       glyph so rendering never depends on a font being present. -->
+  <rect width="512" height="512" rx="112" fill="#16171d"/>
+
+  <!-- Two light squares, hinting at a board without being a full grid. -->
+  <rect x="64" y="64" width="88" height="88" fill="#2e303a"/>
+  <rect x="360" y="360" width="88" height="88" fill="#2e303a"/>
+
+  <g fill="#f3f4f6">
+    <!-- head -->
+    <circle cx="256" cy="176" r="52"/>
+    <!-- collar -->
+    <rect x="196" y="232" width="120" height="26" rx="13"/>
+    <!-- body: tapered from collar to base -->
+    <path d="M214 258 C214 316 190 350 176 380 L336 380 C322 350 298 316 298 258 Z"/>
+    <!-- base -->
+    <rect x="152" y="392" width="208" height="40" rx="18"/>
+  </g>
+</svg>
