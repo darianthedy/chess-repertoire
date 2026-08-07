@@ -1,6 +1,11 @@
 import { useCallback, useMemo, useState } from 'react';
 import { ROOT_FEN } from '../model/fen';
-import { fetchStudyPgn, importPgn, looksLikeGames } from '../model/pgn';
+import {
+  fetchStudyPgn,
+  importPgn,
+  looksLikeGames,
+  looksLikePgn,
+} from '../model/pgn';
 import type { ImportResult } from '../model/pgn';
 import {
   addMove,
@@ -87,6 +92,17 @@ export function Editor({ rep, onChange, onBack, initialPath }: Props) {
     (text: string, onDone: () => void) => {
       setImportErr(null);
       setImportMsg(null);
+
+      if (!text.trim()) {
+        setImportErr('That file is empty.');
+        return;
+      }
+      if (!looksLikePgn(text)) {
+        setImportErr(
+          "That doesn't look like PGN — no move numbers or tags found. If it's a .zip or .cbv, unpack it first.",
+        );
+        return;
+      }
 
       // Games and repertoires are both PGN but mean opposite things. Importing
       // games would add every move both players made — including the opponent's
@@ -183,9 +199,11 @@ export function Editor({ rep, onChange, onBack, initialPath }: Props) {
 
           <label className="field">
             <span>…or upload a .pgn file</span>
+            {/* No `accept` filter on purpose: mobile pickers grey out .pgn
+                because the OS doesn't know the type. Any file is accepted and
+                the contents are validated instead. */}
             <input
               type="file"
-              accept=".pgn,application/x-chess-pgn,text/plain"
               onChange={(e) => {
                 const f = e.target.files?.[0];
                 if (f) void doImportFile(f);

@@ -252,6 +252,21 @@ export function importPgn(
 }
 
 /**
+ * Is this plausibly PGN at all?
+ *
+ * Used in place of an `accept` filter on file inputs: mobile file pickers grey
+ * out .pgn files because neither iOS nor Android recognises the type, so the
+ * filter hides exactly the files it's meant to allow. Any file is accepted and
+ * the contents are checked instead.
+ */
+export function looksLikePgn(text: string): boolean {
+  const sample = text.slice(0, 4000);
+  const hasHeader = /^\s*\[\w+\s+"/m.test(sample);
+  const hasMoveNumber = /\b1\s*\.\s*[A-Za-z]/.test(sample);
+  return hasHeader || hasMoveNumber;
+}
+
+/**
  * Does this PGN look like played games rather than a repertoire?
  *
  * Importing games into a repertoire quietly corrupts it: every move both

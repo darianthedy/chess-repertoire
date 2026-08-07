@@ -97,7 +97,6 @@ export function RepertoireList({
           <input
             ref={fileRef}
             type="file"
-            accept="application/json"
             hidden
             onChange={(e) => {
               const f = e.target.files?.[0];

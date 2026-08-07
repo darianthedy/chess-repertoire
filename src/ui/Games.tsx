@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
-import { fetchRecentGames, gamesFromPgn } from '../model/chesscom';
+import { colourOf, fetchRecentGames, gamesFromPgn } from '../model/chesscom';
+import { looksLikePgn } from '../model/pgn';
 import { analyseGames, describePath, groupDeviations } from '../model/deviation';
 import type { DeviationGroup } from '../model/deviation';
 import type { PathStep } from '../model/tree';
@@ -61,7 +62,14 @@ export function Games({ state, setState, onFix, onBack }: Props) {
       setError(null);
       setGroups(null);
       try {
-        const games = gamesFromPgn(await file.text());
+        const text = await file.text();
+        if (!looksLikePgn(text)) {
+          throw new Error(
+            "That doesn't look like PGN — no move numbers or tags found.",
+          );
+        }
+
+        const games = gamesFromPgn(text);
         if (!games.length) throw new Error('No games found in that file');
 
         // The file knows the players but not which one is me. Prefer the typed
@@ -69,7 +77,16 @@ export function Games({ state, setState, onFix, onBack }: Props) {
         const handle = username.trim() || commonPlayer(games);
         if (!handle) {
           throw new Error(
-            'Enter your chess.com username so I know which side is yours',
+            'Enter your chess.com username so I know which side is yours — no single player appears in every game.',
+          );
+        }
+
+        // A file of other people's games has nothing to say about my openings,
+        // and would otherwise report a bland "no gaps found".
+        const mine = games.filter((g) => colourOf(g, handle) !== null);
+        if (!mine.length) {
+          throw new Error(
+            `"${handle}" doesn't play in any of these games. This looks like someone else's games — try importing it as a repertoire instead.`,
           );
         }
         setUsername(handle);
@@ -124,9 +141,10 @@ export function Games({ state, setState, onFix, onBack }: Props) {
 
         <label className="field">
           <span>…or upload a PGN you downloaded from chess.com</span>
+          {/* No `accept` filter: mobile pickers hide .pgn files, since neither
+              iOS nor Android recognises the type. */}
           <input
             type="file"
-            accept=".pgn,application/x-chess-pgn,text/plain"
             disabled={busy}
             onChange={(e) => {
               const f = e.target.files?.[0];
