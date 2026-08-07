@@ -2,10 +2,14 @@ import { useCallback, useMemo, useState } from 'react';
 import { adoptLine, gameLabel, gameToTree } from '../model/collections';
 import { ROOT_FEN } from '../model/fen';
 import { parseMovetext } from '../model/pgn';
-import { getNode } from '../model/tree';
+import { DEFAULT_ENGINE_SETTINGS } from '../model/types';
+import { addMove, getNode, tryMove } from '../model/tree';
 import type { PathStep } from '../model/tree';
-import type { AppState, Repertoire, StoredGame } from '../model/types';
+import type { AppState, EngineSettings, Repertoire, StoredGame } from '../model/types';
+import { EnginePanel } from './EnginePanel';
+import { EvalBar } from './EvalBar';
 import { MoveBoard } from './MoveBoard';
+import { useAnalysis, useEngine } from './useEngine';
 
 /**
  * Orient a collection game to the side I'd be studying it from: the colour of
@@ -31,6 +35,7 @@ interface Props {
   state: AppState;
   game: StoredGame;
   onAdopt: (repertoireId: string, fn: (rep: Repertoire) => Repertoire) => void;
+  onEngineChange: (settings: EngineSettings) => void;
   onBack: () => void;
 }
 
@@ -41,11 +46,32 @@ interface Props {
  * editor's FEN-keyed walk — variations, transpositions and comments all behave
  * the same, with no second tree implementation to keep in step.
  */
-export function GameView({ state, game, onAdopt, onBack }: Props) {
-  const tree = useMemo(() => gameToTree(game), [game]);
+export function GameView({
+  state,
+  game,
+  onAdopt,
+  onEngineChange,
+  onBack,
+}: Props) {
+  /**
+   * State rather than a memo because moves get grafted on: playing an engine
+   * suggestion the game never saw extends this tree, so exploring a
+   * refutation works with the same navigation as the game itself.
+   * `key={game.id}` in App.tsx resets it when the game changes.
+   */
+  const [tree, setTree] = useState(() => gameToTree(game));
   const [path, setPath] = useState<PathStep[]>([]);
   const [target, setTarget] = useState('');
   const [message, setMessage] = useState<string | null>(null);
+  /**
+   * `fen:san` of moves added by exploring rather than by the game. Kept so the
+   * continuation list can say which moves were actually played — a suggestion
+   * silently indistinguishable from the game score would be worse than not
+   * offering exploration at all.
+   */
+  const [explored, setExplored] = useState<Set<string>>(() => new Set());
+
+  const settings = state.engine ?? DEFAULT_ENGINE_SETTINGS;
 
   /**
    * Default to the side the game is useful from: if one of my repertoires
@@ -59,15 +85,40 @@ export function GameView({ state, game, onAdopt, onBack }: Props) {
   const fen = path.length ? path[path.length - 1].fen : ROOT_FEN;
   const node = getNode(tree, fen);
 
+  const { engine, status } = useEngine(settings.enabled);
+  const { analysis, thinking } = useAnalysis(engine, fen, {
+    depth: settings.depth,
+    enabled: settings.enabled,
+  });
+
+  /** Live repertoires only: a parked one has no opinion worth checking. */
+  const liveRepertoires = useMemo(
+    () => state.repertoires.filter((r) => r.state !== 'parked'),
+    [state.repertoires],
+  );
+
   const play = useCallback(
     (san: string): boolean => {
-      const edge = node.moves.find((m) => m.san === san);
-      if (!edge) return false;
-      setPath((p) => [...p, { san, fen: edge.to }]);
       setMessage(null);
+
+      const edge = node.moves.find((m) => m.san === san);
+      if (edge) {
+        setPath((p) => [...p, { san, fen: edge.to }]);
+        return true;
+      }
+
+      // Off the game score. Graft the move on rather than rejecting it: the
+      // engine's improvement is the thing worth walking into, and adding it
+      // here means adopting the line into a repertoire also just works.
+      const to = tryMove(fen, san);
+      if (!to) return false;
+
+      setTree((t) => addMove(t, fen, san, ''));
+      setExplored((s) => new Set(s).add(`${fen}:${san}`));
+      setPath((p) => [...p, { san, fen: to }]);
       return true;
     },
-    [node.moves],
+    [fen, node.moves],
   );
 
   const adopt = useCallback(() => {
@@ -107,7 +158,18 @@ export function GameView({ state, game, onAdopt, onBack }: Props) {
 
       <div className="editor__layout">
         <div className="editor__board">
-          <MoveBoard fen={fen} orientation={orientation} onMove={play} />
+          <div className="board-with-bar">
+            {settings.enabled && (
+              <EvalBar
+                score={analysis?.lines[0]?.score ?? null}
+                orientation={orientation}
+                thinking={thinking}
+              />
+            )}
+            <div className="board-with-bar__board">
+              <MoveBoard fen={fen} orientation={orientation} onMove={play} />
+            </div>
+          </div>
           <div className="editor__nav">
             <button
               onClick={() =>
@@ -116,6 +178,20 @@ export function GameView({ state, game, onAdopt, onBack }: Props) {
               title="Flip board"
             >
               ⇅ Flip
+            </button>
+            <button
+              onClick={() =>
+                onEngineChange({ ...settings, enabled: !settings.enabled })
+              }
+              data-on={settings.enabled}
+              className="engine__toggle"
+              title={
+                settings.enabled
+                  ? 'Turn the engine off'
+                  : 'Analyse with Stockfish (downloads 7 MB the first time)'
+              }
+            >
+              {settings.enabled ? '◉ Engine' : '○ Engine'}
             </button>
             <button onClick={() => setPath([])} disabled={!path.length}>
               « Start
@@ -139,6 +215,17 @@ export function GameView({ state, game, onAdopt, onBack }: Props) {
         </div>
 
         <aside className="editor__panel">
+          {settings.enabled && (
+            <EnginePanel
+              status={status}
+              analysis={analysis}
+              thinking={thinking}
+              repertoires={liveRepertoires}
+              onPlay={play}
+              targetDepth={settings.depth}
+            />
+          )}
+
           <section className="card">
             <h2>Line</h2>
             {path.length === 0 ? (
@@ -182,6 +269,14 @@ export function GameView({ state, game, onAdopt, onBack }: Props) {
                       <button className="moves__san" onClick={() => play(m.san)}>
                         {m.san}
                       </button>
+                      {explored.has(`${fen}:${m.san}`) && (
+                        <span
+                          className="engine__tag"
+                          title="You added this while exploring — the game did not play it"
+                        >
+                          yours
+                        </span>
+                      )}
                     </div>
                     {m.note && <p className="moves__note">{m.note}</p>}
                   </li>

@@ -1,7 +1,8 @@
 import { get, set } from 'idb-keyval';
 import { initialState } from './seed';
 import { emptyNodes } from './tree';
-import type { AppState, Repertoire } from './types';
+import { DEFAULT_ENGINE_SETTINGS } from './types';
+import type { AppState, EngineSettings, Repertoire } from './types';
 
 const KEY = 'chess-repertoire:state:v1';
 
@@ -75,6 +76,17 @@ export function parseState(raw: unknown): AppState {
       )
     : [];
 
+  // Engine settings arrived last; older exports load with it switched off,
+  // which is also the default for a fresh install.
+  const e = obj.engine as Record<string, unknown> | undefined;
+  const engine: EngineSettings = {
+    enabled: e?.enabled === true,
+    depth:
+      typeof e?.depth === 'number' && e.depth >= 6 && e.depth <= 30
+        ? e.depth
+        : DEFAULT_ENGINE_SETTINGS.depth,
+  };
+
   return {
     version: 1,
     slots,
@@ -83,6 +95,7 @@ export function parseState(raw: unknown): AppState {
     cards,
     streak,
     chesscomUsername,
+    engine,
   };
 }
 

@@ -36,8 +36,11 @@ Everything else is out of scope until those two are used daily for a month.
 
 Explicitly NOT building:
 
-- ❌ A chess engine or move-legality logic (use `chess.js`)
-- ❌ Engine analysis / evaluation bars
+- ❌ A chess engine or move-legality logic (use `chess.js`, and Stockfish as-is)
+- ~~❌ Engine analysis / evaluation bars~~ — **revised, see F8.** Shipped as an
+  opt-in reviewing aid, deliberately excluded from drills. The original ban was
+  right about the risk and wrong about the scope: the danger is an engine
+  *during recall*, not an engine while reading a game.
 - ❌ Opponent prep, game database, or master-games search
 - ❌ Accounts, sync, multi-user, sharing
 - ❌ A custom spaced-repetition algorithm (use stock SM-2)
@@ -307,6 +310,42 @@ than negligent.
 **Requires:** my rating band and primary time control, set once in preferences.
 The explorer is worthless unfiltered — masters-database frequencies describe an
 opening landscape I will never encounter.
+
+### F8 — Engine analysis (opt-in, and never mid-drill)
+
+Stockfish, cross-referenced against the repertoire rather than presented raw.
+
+**Where it is allowed:**
+
+- **Reading a collection game.** Eval bar beside the board and the top few lines,
+  each tagged with whether the repertoire already holds it. The headline is a
+  sentence answering *should I change anything*, not a number. Engine
+  suggestions can be walked into even when the game never played them.
+- **After a drill session.** The positions missed, each showing what was played,
+  what the book wanted, and what each cost.
+
+**Where it is banned:** during a drill. A drill is a recall test, and an eval on
+screen turns it into a reading test — you work backwards from the bar to the
+move instead of remembering it, and the card gets graded on the wrong skill.
+This is not a UI preference; it is the reason the feature is split in two.
+
+**Design constraints that fell out of the platform:**
+
+- Single-threaded WASM build (`lite-single`, 7.3 MB). Multi-threaded Stockfish
+  needs `SharedArrayBuffer`, which needs COOP/COEP headers, which GitHub Pages
+  cannot set. Faking them with a second service worker would fight the PWA's own.
+- Off by default, fetched on first use, then cached — including offline. Nobody
+  drilling on mobile data should pay 7 MB they did not ask for.
+- Move quality is judged in **win percentage, not centipawns**. The same 60cp
+  swing is a real error near equality and nothing at all in a won position.
+- A move outside the top-N list is reported as **unrated, not bad** — except in
+  the mistake review, where the book move gets a second search, because there
+  its cost is the only number that matters and a blank reads as a verdict.
+
+*Rationale: the engine is here to audit the repertoire, not to replace judgement
+about it. "Stockfish prefers something else" is the beginning of a question, not
+an instruction — most opening choices are within noise of best, and the panel
+says so plainly rather than manufacturing a reason to change.*
 
 ### Depth policy
 

@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# Fetched by scripts/fetch-engine.mjs from a pinned, hash-checked npm artifact.
+# Not committed: 7.3 MB of binary that can be reproduced exactly on demand.
+public/engine
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
