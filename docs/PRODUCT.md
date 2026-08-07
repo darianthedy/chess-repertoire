@@ -231,8 +231,9 @@ The core loop. **The unit of practice is a whole line, not a single position.**
   it is the exact skill a real game demands.
 - If it's the opponent's move, the app plays it. Then I move. Then it replies.
   Back and forth, automatically, no clicking "next".
-- **Correct** → the move plays, brief green, the opponent's reply comes back
-  immediately. Flow is unbroken.
+- **Correct** → the move plays and the opponent's reply comes back immediately.
+  No "Correct" card, no confirmation step, nothing to acknowledge. Being right is
+  the unremarkable case; only a miss is worth stopping for.
 - **Wrong** → red, show the correct move and its note. Then **continue the line
   from the correct move** — never restart. Restarting punishes with repetition of
   what I already knew.

@@ -130,7 +130,7 @@ await page.waitForSelector('.drill');
 await page.waitForSelector('.drill__status:has-text("Your move")', { timeout: 8000 });
 await page.locator('[data-square="d2"]').click();
 await page.locator('[data-square="d4"]').click();
-await page.waitForSelector('.drill__status[data-kind="right"]', { timeout: 5000 });
+await page.waitForSelector('.drill__status[data-kind="note"]', { timeout: 5000 });
 const noteInDrill = await page.locator('.drill__note').textContent();
 check('imported note surfaces during drilling', noteInDrill.includes('queen pawn'), `"${noteInDrill}"`);
 

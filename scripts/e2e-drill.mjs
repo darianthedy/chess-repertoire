@@ -30,8 +30,8 @@ const move = async (from, to) => {
 };
 
 /**
- * Wait for a square to be occupied. The drill holds feedback for ~550ms and
- * then auto-plays the reply, so waiting on status text alone races: the old
+ * Wait for a square to be occupied. A correct move advances immediately and the
+ * reply auto-plays ~450ms later, so waiting on status text alone races: the old
  * "Your move" is still in the DOM immediately after a click.
  */
 const waitForPieceOn = (square) =>
@@ -101,10 +101,13 @@ await page.waitForSelector('.drill__status:has-text("Your move")');
 
 // --- correct move ----------------------------------------------------------
 await move('d2', 'd4');
-await page.waitForSelector('.drill__status[data-kind="right"]', { timeout: 5000 });
-check('correct move is graded right', true);
+// A correct move never stops the loop: no "Correct", no acknowledgement — the
+// note rides along beside the opponent's reply.
+await page.waitForSelector('.drill__status[data-kind="note"]', { timeout: 5000 });
 const noteShown = await page.locator('.drill__note').textContent();
 check('the move note is surfaced', noteShown.includes('London setup'), `"${noteShown}"`);
+const afterCorrect = await page.locator('.drill__status').innerText();
+check('correct move is not announced', !/correct/i.test(afterCorrect), `"${afterCorrect.replace(/\n/g, ' | ')}"`);
 
 // The opponent should reply on its own, with no interaction.
 await waitForPieceOn('d5');
@@ -149,7 +152,7 @@ await page.waitForSelector('.drill__status:has-text("Your move")', { timeout: 80
 await move('d2', 'd4');
 await waitForPieceOn('d5'); // opponent has replied; my turn again
 await move('g1', 'f3');
-await page.waitForSelector('.drill__status[data-kind="right"]', { timeout: 5000 });
+await waitForPieceOn('f3');
 check('the previously missed move is accepted on the next pass', true);
 
 await waitForPieceOn('f6'); // ...Nf6 played automatically
