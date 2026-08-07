@@ -490,3 +490,236 @@ textarea {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* --- engine ----------------------------------------------------------------
+   Colours are shared with nothing else on purpose: an engine verdict is an
+   outside opinion, and it should not look like the app's own UI chrome. */
+
+.board-with-bar {
+  display: flex;
+  gap: 0.6rem;
+  align-items: stretch;
+  min-width: 0;
+}
+.board-with-bar__board {
+  flex: 1;
+  min-width: 0;
+}
+
+.evalbar {
+  position: relative;
+  width: 16px;
+  flex: 0 0 16px;
+  border-radius: 4px;
+  overflow: hidden;
+  /* Black's colour is the track; White's fill sits on top of it. */
+  background: #3a3d46;
+  /* The bar is drawn White-at-the-bottom and flipped with the board, so
+     "rising" always means the side you are studying is doing well. */
+  display: flex;
+  flex-direction: column-reverse;
+  transition: opacity 0.2s ease;
+}
+.evalbar[data-orientation='black'] {
+  flex-direction: column;
+}
+.evalbar[data-thinking='yes'] {
+  opacity: 0.6;
+}
+.evalbar__white {
+  background: #f0f1f4;
+  transition: height 0.25s ease;
+}
+.evalbar__label {
+  position: absolute;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 0.55rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  pointer-events: none;
+}
+/* Sits on whichever half is currently big enough to hold it, in that half's
+   contrasting colour. */
+.evalbar__label[data-end='white'] {
+  bottom: 3px;
+  color: #16181d;
+}
+.evalbar__label[data-end='black'] {
+  top: 3px;
+  color: #f0f1f4;
+}
+.evalbar[data-orientation='black'] .evalbar__label[data-end='white'] {
+  bottom: auto;
+  top: 3px;
+}
+.evalbar[data-orientation='black'] .evalbar__label[data-end='black'] {
+  top: auto;
+  bottom: 3px;
+}
+
+.engine__toggle[data-on='true'] {
+  border-color: #5b8def;
+  color: #5b8def;
+}
+
+.engine__depth {
+  float: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 400;
+}
+
+.engine__summary {
+  font-size: 0.82rem;
+  line-height: 1.45;
+  margin: 0 0 0.6rem;
+  padding-left: 0.6rem;
+  border-left: 2px solid var(--border);
+}
+.engine__summary[data-agrees='true'] {
+  border-left-color: #3d9a5c;
+}
+
+.engine__lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.engine__line {
+  padding: 0.4rem 0.5rem;
+  border-radius: 6px;
+  background: var(--surface);
+}
+.engine__line[data-inbook='true'] {
+  box-shadow: inset 2px 0 0 #5b8def;
+}
+.engine__head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+.engine__score {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8rem;
+  font-weight: 600;
+  min-width: 3.2rem;
+}
+.engine__san {
+  font-weight: 600;
+  font-size: 0.85rem;
+  padding: 0.15rem 0.4rem;
+  background: none;
+  border: none;
+}
+.engine__san:disabled {
+  cursor: default;
+  opacity: 1;
+}
+.engine__tag {
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.1rem 0.3rem;
+  border-radius: 3px;
+  background: #5b8def;
+  color: #fff;
+}
+.engine__verdict {
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+  font-variant-numeric: tabular-nums;
+}
+.engine__verdict[data-verdict='inaccuracy'] {
+  background: rgba(214, 158, 69, 0.18);
+  color: #b07e21;
+}
+.engine__verdict[data-verdict='mistake'] {
+  background: rgba(214, 121, 69, 0.18);
+  color: #c25f26;
+}
+.engine__verdict[data-verdict='blunder'] {
+  background: rgba(214, 69, 69, 0.18);
+  color: #d64545;
+}
+.engine__verdict[data-verdict='best'],
+.engine__verdict[data-verdict='good'] {
+  background: rgba(61, 154, 92, 0.15);
+  color: #3d9a5c;
+}
+.engine__pv {
+  margin: 0.25rem 0 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+}
+.engine__note {
+  margin: 0.25rem 0 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+/* --- post-session review ---------------------------------------------------- */
+
+.review {
+  text-align: left;
+  margin: 0 auto 1.5rem;
+  max-width: 560px;
+}
+.review__list {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.review__item {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: start;
+}
+.review__board {
+  display: flex;
+  gap: 0.4rem;
+}
+.review__boardinner {
+  flex: 1;
+  min-width: 0;
+  /* Read-only: this is a record of what happened, not a place to play. */
+  pointer-events: none;
+}
+.review__detail {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.review__line {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  font-size: 0.85rem;
+}
+.review__label {
+  color: var(--muted);
+  font-size: 0.72rem;
+  min-width: 4.5rem;
+}
+
+@media (max-width: 560px) {
+  .review__item {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -1,5 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { chromium } from 'playwright';
+
+// The dev server picks the next free port when 5173 is taken, so allow an
+// override rather than silently testing someone else's checkout.
+const BASE = process.env.E2E_BASE ?? 'http://localhost:5173/';
 let failures = 0;
 const check = (l, ok, x='') => { console.log(`${ok?'PASS':'FAIL'}  ${l}${x?'  '+x:''}`); if(!ok) failures++; };
 
@@ -9,7 +13,7 @@ const topLeft = (page) => page.locator('[data-square]').first().getAttribute('da
 const b = await chromium.launch();
 const p = await b.newPage({ viewport: { width: 900, height: 1000 } });
 p.on('pageerror', e => console.log('PAGEERROR', String(e).slice(0,120)));
-await p.goto('http://localhost:5173/');
+await p.goto(BASE);
 await p.waitForSelector('.home');
 
 // --- editor: a Black repertoire should start from Black's side ---
