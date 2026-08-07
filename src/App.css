@@ -357,6 +357,95 @@ textarea {
   color: var(--text);
 }
 
+/* ---------- variations list ---------- */
+
+.variations {
+  max-width: 760px;
+  margin: 0 auto;
+}
+.vars__filters {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-bottom: 0.75rem;
+}
+.vars__toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+.vars__toggle input {
+  width: auto;
+  margin: 0;
+}
+.vars__count {
+  margin: 0 0 0.6rem;
+}
+
+.vars {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.var {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.3rem;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.65rem 0.8rem;
+  background: none;
+}
+.var:hover {
+  background: var(--surface);
+}
+.var__moves {
+  font-size: 0.88rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.45;
+}
+.var__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.65rem;
+}
+.var__plan {
+  font-style: italic;
+}
+
+.tag {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0.05rem 0.35rem;
+  margin-left: 0.35rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.var__meta .tag {
+  margin-left: 0;
+}
+.tag--warn {
+  border-color: #d08a2c;
+  color: #b8791f;
+}
+
+.replacing {
+  margin: 0 0 1rem;
+}
+
 /* ---------- games / gaps ---------- */
 
 .games {

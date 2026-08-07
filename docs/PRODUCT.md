@@ -185,8 +185,12 @@ annotation and deletion both happen afterwards from the continuations list.
 in Lichess.*
 
 ### F2 — Tree editor
+- **A repertoire opens as a list of its lines**, not as a board. Pick one to
+  view or edit it; the board editor is where you land, not where you start.
 - Board + move list side by side.
 - Click through the tree; play a move on the board to add a new line.
+- Edit an existing move in place: **replace** it with a different one, or
+  **promote** it to be the main line at that branch.
 - Whether a move is **mine** or the **opponent's** is derived from the side to
   move, never asked. Making it a toggle would only create a way to get it wrong.
 - Optional note field per move, editable at any time.
@@ -194,6 +198,43 @@ in Lichess.*
   subtree outright — with transpositions, a position under a deleted move may
   still be reachable another way and must survive.
 - Show, per node, how many of my games reached it (see F5) once data exists.
+
+**Design decision — lines are the way in, positions are the way to edit.**
+The tree is stored FEN-keyed and browsed one node at a time. That's the right
+shape for entering moves and the wrong one for reading: opening a repertoire
+straight onto a board answers "add a move" well and "what have I actually got in
+here?" not at all — the only way to find an existing line was to remember it and
+navigate back down to it, which is exactly the memory the app is supposed to be
+holding on my behalf.
+
+So a repertoire opens as its **root-to-leaf lines**, in movetext, filterable,
+each flagged with whether it's the main line and whether it has a terminal plan.
+This is the same unit the drill presents (F3), so the list reads as "the puzzles
+this repertoire can generate" rather than as a second, competing model. Picking
+a line opens the editor at its **last** move — the end is where a line is
+usually wrong, and it's where the plan box lives.
+
+Lines-with-no-plan get their own filter, because "a line that ends on a bare move
+without a plan is unfinished" is otherwise a rule with no way to act on it.
+
+**Design decision — replace is its own operation, not delete-then-add.**
+Changing my mind about a move is the single most common edit, and expressing it
+as a deletion followed by re-entry loses the move's place in the list — the
+replacement lands at the end, silently demoting the line. `replaceMove` keeps the
+slot. What it does *not* do is re-graft the old continuation under the new move:
+the rest of a line is an answer to the move that came before it, so carrying it
+over would manufacture theory I never chose. The count of positions that will be
+discarded is shown before confirming, and counts only those reachable no other
+way — a position that transposes in elsewhere survives.
+
+**Design decision — edge order is the main line, so it's editable.**
+Extending a position forward takes the first continuation at each branch, which
+already made edge order load-bearing for drills. Promotion (`↑`) makes that
+visible and controllable instead of an accident of entry order.
+
+**Enumeration is capped.** Transpositions make the tree a DAG, where the number
+of distinct root-to-leaf paths can grow exponentially. The list stops at 400 and
+says so, rather than hanging on a tree that's perfectly reasonable to own.
 
 ### F3 — Drill mode
 The core loop. **The unit of practice is a whole line, not a single position.**

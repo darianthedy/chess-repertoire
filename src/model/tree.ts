@@ -91,6 +91,95 @@ export function updateNote(
   };
 }
 
+/**
+ * Move an edge to the front of its node's list.
+ *
+ * Order is not cosmetic: extending a position forward takes the first
+ * continuation at each branch (lines.ts walkToLeaf), so the first edge *is* the
+ * main line — both in the variation list and in what a drill walks into.
+ */
+export function promoteMove(
+  rep: Repertoire,
+  fromFen: string,
+  san: string,
+): Repertoire {
+  const from = getNode(rep, fromFen);
+  const edge = from.moves.find((m) => m.san === san);
+  if (!edge) return rep;
+
+  return {
+    ...rep,
+    nodes: {
+      ...rep.nodes,
+      [fromFen]: {
+        ...from,
+        fen: fromFen,
+        moves: [edge, ...from.moves.filter((m) => m !== edge)],
+      },
+    },
+  };
+}
+
+/**
+ * Swap one move for another at a position, keeping its place in the list.
+ *
+ * Changing my mind about a move is a different action from deleting it and
+ * re-entering: the replacement belongs where the old move was, not appended at
+ * the end. Everything only reachable through the old move goes — the rest of a
+ * line is an answer to the move that came before it, so re-grafting it under a
+ * different move would produce theory I never chose.
+ */
+export function replaceMove(
+  rep: Repertoire,
+  fromFen: string,
+  oldSan: string,
+  newSan: string,
+): Repertoire {
+  const from = getNode(rep, fromFen);
+  const old = from.moves.find((m) => m.san === oldSan);
+  if (!old || oldSan === newSan) return rep;
+
+  // The replacement is already a sibling here, so this is really a deletion —
+  // otherwise the swap would create a duplicate edge.
+  if (from.moves.some((m) => m.san === newSan)) {
+    return deleteMove(rep, fromFen, oldSan);
+  }
+
+  const to = tryMove(fromFen, newSan);
+  if (!to) return rep;
+
+  // The note travels with the slot rather than being dropped. It described the
+  // old move, so it may well be stale — but a stale note is visible and one
+  // click from being rewritten, whereas a silently deleted one is just lost.
+  const edge: MoveEdge = { san: newSan, isMine: old.isMine, note: old.note, to };
+
+  return collectGarbage({
+    ...rep,
+    nodes: {
+      ...rep.nodes,
+      [fromFen]: {
+        ...from,
+        fen: fromFen,
+        moves: from.moves.map((m) => (m === old ? edge : m)),
+      },
+      ...(rep.nodes[to] ? {} : { [to]: { fen: to, moves: [] } }),
+    },
+  });
+}
+
+/**
+ * How many stored positions removing this move would discard — the number worth
+ * showing before a destructive edit. Not the size of the subtree: positions
+ * still reachable by a transposition survive.
+ */
+export function positionsLostByRemoving(
+  rep: Repertoire,
+  fromFen: string,
+  san: string,
+): number {
+  return positionCount(rep) - positionCount(deleteMove(rep, fromFen, san));
+}
+
 export function setPlan(
   rep: Repertoire,
   fen: string,
