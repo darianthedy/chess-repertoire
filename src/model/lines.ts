@@ -37,9 +37,27 @@ export function depthMap(rep: Repertoire): Record<string, number> {
 }
 
 /**
- * Positions that generate cards: my move, at least one continuation, and inside
+ * A position where I've stored more than one move of my own.
+ *
+ * Every edge leaving a position where it's my turn is mine — tree.ts derives
+ * `isMine` from the turn rather than asking — so "more than one continuation"
+ * is exactly "more than one move I would play here". There is no single right
+ * answer to test, so the drill plays one of them for me instead of grading a
+ * choice I deliberately left open (PRODUCT.md §6, F3).
+ */
+export function isAmbiguous(rep: Repertoire, fen: string): boolean {
+  return isMyTurn(rep, fen) && getNode(rep, fen).moves.length > 1;
+}
+
+/**
+ * Positions that generate cards: my move, exactly one continuation, and inside
  * the repertoire's drill window. Deeper positions stay stored and are still
  * played through during a drill — they're just not graded.
+ *
+ * Requiring exactly one continuation is what keeps ambiguous positions out of
+ * the schedule entirely: a card that can never be answered would sit in
+ * `dueCount` forever, and drawing a puzzle at one would only ask a question
+ * with several right answers.
  */
 export function drillableFens(
   rep: Repertoire,
@@ -50,7 +68,7 @@ export function drillableFens(
     (fen) =>
       depths[fen] < maxPly &&
       isMyTurn(rep, fen) &&
-      getNode(rep, fen).moves.length > 0,
+      getNode(rep, fen).moves.length === 1,
   );
 }
 
@@ -126,7 +144,7 @@ export function lineThrough(
       d !== undefined &&
       d < maxPly &&
       isMyTurn(rep, fen) &&
-      getNode(rep, fen).moves.length > 0
+      getNode(rep, fen).moves.length === 1
     ) {
       cardFens.push(fen);
     }
