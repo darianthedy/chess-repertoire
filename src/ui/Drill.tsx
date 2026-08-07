@@ -4,8 +4,11 @@ import { lineThrough, pickLine, RECENT_MEMORY } from '../model/lines';
 import type { DrillLine } from '../model/lines';
 import { cardKey, CORRECT, newCard, schedule, WRONG } from '../model/srs';
 import { getNode, isMyTurn } from '../model/tree';
+import { DEFAULT_ENGINE_SETTINGS } from '../model/types';
 import type { AppState, Repertoire } from '../model/types';
 import { MoveBoard } from './MoveBoard';
+import { SessionReview } from './SessionReview';
+import type { Mistake } from './SessionReview';
 
 /** Pause before the opponent replies, so a move is seen rather than teleporting. */
 const REPLY_MS = 450;
@@ -64,6 +67,12 @@ export function Drill({ state, first, onGrade, onDrilled, onDone }: Props) {
   const [missed, setMissed] = useState(false);
   /** The repertoire whose recency has already been recorded for this line. */
   const touched = useRef<string | null>(null);
+  /**
+   * Positions missed this session, recorded as they happen but never acted on
+   * until the session is over. Nothing here touches the engine — see
+   * SessionReview for why analysis has to wait.
+   */
+  const [mistakes, setMistakes] = useState<Mistake[]>([]);
 
   const rep = useMemo(
     () => state.repertoires.find((r) => r.id === line.repertoireId) as Repertoire,
@@ -202,9 +211,39 @@ export function Drill({ state, first, onGrade, onDrilled, onDone }: Props) {
       const edge = getNode(rep, fen).moves.find((m) => m.san === expected.san);
       if (isGraded) grade(false);
       setFeedback({ kind: 'wrong', san: expected.san, note: edge?.note ?? '' });
+
+      // Recorded for the end-of-session review. Same position missed twice
+      // (once on the retry pass) is still one thing to look at.
+      setMistakes((prev) =>
+        prev.some((m) => m.fen === fen && m.playedSan === san)
+          ? prev
+          : [
+              ...prev,
+              {
+                repertoireId: rep.id,
+                fen,
+                path: line.steps.slice(0, ply),
+                playedSan: san,
+                expectedSan: expected.san,
+                note: edge?.note ?? '',
+              },
+            ],
+      );
       return false;
     },
-    [atEnd, divergence, expected, fen, finished, grade, isGraded, myMove, rep],
+    [
+      atEnd,
+      divergence,
+      expected,
+      fen,
+      finished,
+      grade,
+      isGraded,
+      line.steps,
+      myMove,
+      ply,
+      rep,
+    ],
   );
 
   const plan = atEnd ? getNode(rep, fen).plan : undefined;
@@ -220,6 +259,17 @@ export function Drill({ state, first, onGrade, onDrilled, onDone }: Props) {
         <p className="muted small">
           {solved} {solved === 1 ? 'puzzle' : 'puzzles'}
         </p>
+
+        {/* Only now. During the session an eval on screen would let you reason
+            your way to the move instead of recalling it. Since the drill is
+            open-ended, this screen is reached by choosing to stop — which
+            makes it the natural place for it, rather than a queue running dry. */}
+        <SessionReview
+          mistakes={mistakes}
+          repertoires={state.repertoires}
+          settings={state.engine ?? DEFAULT_ENGINE_SETTINGS}
+        />
+
         <button className="primary" onClick={onDone}>
           Back to repertoires
         </button>

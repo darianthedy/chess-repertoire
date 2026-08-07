@@ -3,6 +3,7 @@ import { pickLine, touchRepertoire } from './model/lines';
 import type { DrillLine } from './model/lines';
 import { bumpStreak } from './model/srs';
 import type { PathStep } from './model/tree';
+import type { EngineSettings } from './model/types';
 import { useAppState } from './useAppState';
 import { CollectionView } from './ui/CollectionView';
 import { Collections } from './ui/Collections';
@@ -42,6 +43,13 @@ export default function App() {
       setState((s) =>
         s ? applyGrade(s, repertoireId, fen, correct, Date.now()) : s,
       );
+    },
+    [setState],
+  );
+
+  const setEngine = useCallback(
+    (engine: EngineSettings) => {
+      setState((s) => (s ? { ...s, engine } : s));
     },
     [setState],
   );
@@ -156,9 +164,13 @@ export default function App() {
       return (
         <main className="app">
           <GameView
+            // Resets the walked line and any grafted exploration when moving
+            // between games.
+            key={game.id}
             state={state}
             game={game}
             onAdopt={updateRepertoire}
+            onEngineChange={setEngine}
             onBack={() =>
               setView({ name: 'collection', collectionId: collection.id })
             }
