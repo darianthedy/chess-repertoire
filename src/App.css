@@ -338,6 +338,90 @@ textarea {
   gap: 0.4rem;
 }
 
+/* --- game viewer ------------------------------------------------------------
+   A game is read, not edited, so everything stacks under the board in reading
+   order instead of competing with it for width. */
+
+.editor__layout--stacked {
+  grid-template-columns: minmax(0, 1fr);
+}
+.gameview__board,
+.gameview__below {
+  width: 100%;
+  max-width: 520px;
+  margin-inline: auto;
+}
+
+.gameview__note {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.gameview__notes {
+  list-style: none;
+  margin: 0.6rem 0 0;
+  padding: 0.6rem 0 0;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.gameview__notes li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+}
+.gameview__notes .moves__san {
+  flex: 0 0 auto;
+}
+.gameview__notes .moves__note {
+  margin: 0;
+}
+
+/* The line scrolls rather than growing the page: the board should never be
+   pushed out of reach by a long game. */
+.gameline {
+  max-height: 11rem;
+  overflow-y: auto;
+  font-variant-numeric: tabular-nums;
+}
+.gameline__row {
+  display: grid;
+  grid-template-columns: 1.8rem 5.5rem minmax(0, 1fr);
+  align-items: baseline;
+  gap: 0.25rem;
+  padding: 0.1rem 0;
+}
+.gameline__no {
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-align: right;
+}
+.gameline__cell {
+  min-width: 0;
+}
+.gameline__cont {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+.gameline__cont[data-span='true'] {
+  grid-column: span 2;
+}
+.gameline__next {
+  padding: 0.1rem 0.4rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+/* Moves you walked into yourself are not part of the game score, and shouldn't
+   be mistaken for it. */
+.gameline__next[data-yours='true'] {
+  border-style: dashed;
+  color: var(--muted);
+  font-weight: 400;
+  font-style: italic;
+}
+
 /* ---------- today ---------- */
 
 .today {

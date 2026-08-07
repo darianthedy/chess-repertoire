@@ -1,11 +1,17 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { adoptLine, gameLabel, gameToTree } from '../model/collections';
 import { ROOT_FEN } from '../model/fen';
 import { parseMovetext } from '../model/pgn';
 import { DEFAULT_ENGINE_SETTINGS } from '../model/types';
 import { addMove, getNode, tryMove } from '../model/tree';
 import type { PathStep } from '../model/tree';
-import type { AppState, EngineSettings, Repertoire, StoredGame } from '../model/types';
+import type {
+  AppState,
+  EngineSettings,
+  MoveEdge,
+  Repertoire,
+  StoredGame,
+} from '../model/types';
 import { EnginePanel } from './EnginePanel';
 import { EvalBar } from './EvalBar';
 import { MoveBoard } from './MoveBoard';
@@ -29,6 +35,15 @@ function suggestedOrientation(
     if (plays) return rep.side === 'w' ? 'white' : 'black';
   }
   return 'white';
+}
+
+/** One numbered row of the line: the pair of moves, plus where to offer the
+ *  continuation choices when the row is the live one. */
+interface Row {
+  no: number;
+  white?: { san: string; index: number };
+  black?: { san: string; index: number };
+  cont?: 'white' | 'black';
 }
 
 interface Props {
@@ -134,15 +149,43 @@ export function GameView({
     );
   }, [onAdopt, path, state.repertoires, target, tree]);
 
-  const pairs = path.reduce<{ san: string; index: number }[][]>(
-    (acc, step, index) => {
+  /**
+   * The annotation on the move that produced the current position — the game's
+   * own comment on where we are, read from the edge we arrived along.
+   */
+  const currentNote = useMemo(() => {
+    if (!path.length) return '';
+    const from = path.length > 1 ? path[path.length - 2].fen : ROOT_FEN;
+    const san = path[path.length - 1].san;
+    return getNode(tree, from).moves.find((m) => m.san === san)?.note ?? '';
+  }, [path, tree]);
+
+  /** Annotations on the moves available from here, shown before playing them. */
+  const nextNotes = node.moves.filter((m) => m.note);
+
+  /**
+   * The line as numbered rows, with the continuation choices sitting in the
+   * cell they'd actually occupy — so picking a move reads as continuing the
+   * game rather than as consulting a separate list.
+   */
+  const rows = useMemo(() => {
+    const out: Row[] = [];
+    path.forEach((step, index) => {
       const entry = { san: step.san, index };
-      if (index % 2 === 0) acc.push([entry]);
-      else acc[acc.length - 1].push(entry);
-      return acc;
-    },
-    [],
-  );
+      if (index % 2 === 0) out.push({ no: index / 2 + 1, white: entry });
+      else out[out.length - 1].black = entry;
+    });
+    if (path.length % 2 === 0) out.push({ no: out.length + 1, cont: 'white' });
+    else out[out.length - 1].cont = 'black';
+    return out;
+  }, [path]);
+
+  // Keep the live end of the line in view as it grows past the scroll box.
+  const lineRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = lineRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [path.length]);
 
   return (
     <div className="editor">
@@ -156,8 +199,8 @@ export function GameView({
         </div>
       </header>
 
-      <div className="editor__layout">
-        <div className="editor__board">
+      <div className="editor__layout editor__layout--stacked">
+        <div className="editor__board gameview__board">
           <div className="board-with-bar">
             {settings.enabled && (
               <EvalBar
@@ -214,71 +257,29 @@ export function GameView({
           </div>
         </div>
 
-        <aside className="editor__panel">
-          {settings.enabled && (
-            <EnginePanel
-              status={status}
-              analysis={analysis}
-              thinking={thinking}
-              repertoires={liveRepertoires}
-              onPlay={play}
-              targetDepth={settings.depth}
-            />
-          )}
-
+        {/* Everything below the board, in the order it's wanted while reading:
+            what the game says here, whether to keep it, what the engine
+            thinks, and the line itself as the thing you steer with. */}
+        <aside className="editor__panel gameview__below">
           <section className="card">
-            <h2>Line</h2>
-            {path.length === 0 ? (
+            <h2>Notes</h2>
+            {currentNote ? (
+              <p className="gameview__note">{currentNote}</p>
+            ) : (
               <p className="muted small">
-                Step through with Next, or play moves on the board.
+                {path.length
+                  ? `No annotation on ${path[path.length - 1].san}.`
+                  : 'No annotation on the starting position.'}
               </p>
-            ) : (
-              <div className="line">
-                {pairs.map((pair, i) => (
-                  <span key={i} className="line__pair">
-                    <span className="muted">{i + 1}.</span>
-                    {pair.map((step) => (
-                      <button
-                        key={step.index}
-                        className={
-                          'line__san' +
-                          (step.index === path.length - 1
-                            ? ' line__san--current'
-                            : '')
-                        }
-                        onClick={() => setPath((p) => p.slice(0, step.index + 1))}
-                      >
-                        {step.san}
-                      </button>
-                    ))}
-                  </span>
-                ))}
-              </div>
             )}
-          </section>
-
-          <section className="card">
-            <h2>Continuations</h2>
-            {node.moves.length === 0 ? (
-              <p className="muted small">End of the game.</p>
-            ) : (
-              <ul className="moves">
-                {node.moves.map((m) => (
-                  <li key={m.san} className="moves__item">
-                    <div className="moves__head">
-                      <button className="moves__san" onClick={() => play(m.san)}>
-                        {m.san}
-                      </button>
-                      {explored.has(`${fen}:${m.san}`) && (
-                        <span
-                          className="engine__tag"
-                          title="You added this while exploring — the game did not play it"
-                        >
-                          yours
-                        </span>
-                      )}
-                    </div>
-                    {m.note && <p className="moves__note">{m.note}</p>}
+            {nextNotes.length > 0 && (
+              <ul className="gameview__notes">
+                {nextNotes.map((m) => (
+                  <li key={m.san}>
+                    <button className="moves__san" onClick={() => play(m.san)}>
+                      {m.san}
+                    </button>
+                    <span className="moves__note">{m.note}</span>
                   </li>
                 ))}
               </ul>
@@ -317,8 +318,125 @@ export function GameView({
               </>
             )}
           </section>
+
+          {settings.enabled && (
+            <EnginePanel
+              status={status}
+              analysis={analysis}
+              thinking={thinking}
+              repertoires={liveRepertoires}
+              onPlay={play}
+              targetDepth={settings.depth}
+            />
+          )}
+
+          <section className="card">
+            <h2>Line</h2>
+            <div className="gameline" ref={lineRef}>
+              {rows.map((row) => (
+                <div key={row.no} className="gameline__row">
+                  <span className="gameline__no">{row.no}.</span>
+                  <Cell
+                    entry={row.white}
+                    cont={row.cont === 'white'}
+                    span={row.cont === 'white'}
+                    last={path.length - 1}
+                    onGoTo={(i) => setPath((p) => p.slice(0, i + 1))}
+                    moves={node.moves}
+                    fen={fen}
+                    explored={explored}
+                    onPlay={play}
+                  />
+                  {row.cont !== 'white' && (
+                    <Cell
+                      entry={row.black}
+                      cont={row.cont === 'black'}
+                      span={false}
+                      last={path.length - 1}
+                      onGoTo={(i) => setPath((p) => p.slice(0, i + 1))}
+                      moves={node.moves}
+                      fen={fen}
+                      explored={explored}
+                      onPlay={play}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
         </aside>
       </div>
     </div>
+  );
+}
+
+/**
+ * One half-move slot in the line. Either a move already played — clickable to
+ * rewind to it — or, on the live row, the choices for what comes next.
+ */
+function Cell({
+  entry,
+  cont,
+  span,
+  last,
+  onGoTo,
+  moves,
+  fen,
+  explored,
+  onPlay,
+}: {
+  entry?: { san: string; index: number };
+  cont: boolean;
+  /** The continuation sits in White's slot, so let it use Black's too. */
+  span: boolean;
+  last: number;
+  onGoTo: (index: number) => void;
+  moves: MoveEdge[];
+  fen: string;
+  explored: Set<string>;
+  onPlay: (san: string) => boolean;
+}) {
+  if (cont) {
+    return (
+      <span className="gameline__cell gameline__cont" data-span={span}>
+        {moves.length === 0 ? (
+          <span className="muted small">end of the game</span>
+        ) : (
+          moves.map((m) => {
+            const yours = explored.has(`${fen}:${m.san}`);
+            return (
+              <button
+                key={m.san}
+                className="gameline__next"
+                onClick={() => onPlay(m.san)}
+                title={
+                  yours
+                    ? `${m.san} — you added this while exploring; the game did not play it`
+                    : m.note || `Play ${m.san}`
+                }
+                data-yours={yours}
+              >
+                {m.san}
+              </button>
+            );
+          })
+        )}
+      </span>
+    );
+  }
+
+  return (
+    <span className="gameline__cell">
+      {entry && (
+        <button
+          className={
+            'line__san' + (entry.index === last ? ' line__san--current' : '')
+          }
+          onClick={() => onGoTo(entry.index)}
+        >
+          {entry.san}
+        </button>
+      )}
+    </span>
   );
 }
