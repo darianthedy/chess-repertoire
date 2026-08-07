@@ -219,18 +219,10 @@ export function RepertoireList({
                       </select>
                       <label className="depth" title="Drill window, in full moves">
                         depth
-                        <input
-                          type="number"
-                          min={1}
-                          max={40}
+                        <DepthInput
                           value={rep.activeDepth}
-                          onChange={(e) =>
-                            patch(rep.id, {
-                              activeDepth: Math.max(
-                                1,
-                                Number(e.target.value) || 1,
-                              ),
-                            })
+                          onCommit={(activeDepth) =>
+                            patch(rep.id, { activeDepth })
                           }
                         />
                       </label>
@@ -250,5 +242,72 @@ export function RepertoireList({
         );
       })}
     </div>
+  );
+}
+
+const MIN_DEPTH = 1;
+const MAX_DEPTH = 40;
+
+/**
+ * Depth box that survives being emptied.
+ *
+ * A plain controlled input committing `Number(value) || 1` on every keystroke
+ * cannot be cleared: deleting the digits to type a new number writes 1 to the
+ * repertoire, which comes straight back as the input's value. So the typed text
+ * lives here as a draft — including the transient empty string — and only
+ * in-range numbers reach `onCommit`. Anything half-typed or out of range waits
+ * for blur, which clamps it or restores the last saved value.
+ */
+function DepthInput({
+  value,
+  onCommit,
+}: {
+  value: number;
+  onCommit: (depth: number) => void;
+}) {
+  const [draft, setDraft] = useState(String(value));
+  const [seenValue, setSeenValue] = useState(value);
+
+  // Changed underneath us (import, or another edit of the same repertoire):
+  // the draft describes a value that no longer exists, so drop it.
+  if (value !== seenValue) {
+    setSeenValue(value);
+    setDraft(String(value));
+  }
+
+  const type = (raw: string) => {
+    setDraft(raw);
+    const n = Number(raw);
+    // Empty, "-", "1e", NaN: legitimate mid-edit states, nothing to save yet.
+    if (raw.trim() === '' || !Number.isInteger(n)) return;
+    if (n < MIN_DEPTH || n > MAX_DEPTH) return;
+    setSeenValue(n);
+    onCommit(n);
+  };
+
+  const settle = () => {
+    const n = Number(draft);
+    if (draft.trim() === '' || !Number.isFinite(n)) {
+      setDraft(String(value));
+      return;
+    }
+    const clamped = Math.min(MAX_DEPTH, Math.max(MIN_DEPTH, Math.round(n)));
+    setDraft(String(clamped));
+    if (clamped !== value) {
+      setSeenValue(clamped);
+      onCommit(clamped);
+    }
+  };
+
+  return (
+    <input
+      type="number"
+      min={MIN_DEPTH}
+      max={MAX_DEPTH}
+      value={draft}
+      onChange={(e) => type(e.target.value)}
+      onBlur={settle}
+      onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+    />
   );
 }
