@@ -6,7 +6,11 @@
  */
 import { chromium } from 'playwright';
 
-const URL = process.argv[2] ?? 'http://localhost:5173/';
+// The dev server picks the next free port when 5173 is taken, so allow an
+// override rather than silently testing someone else's checkout.
+const BASE = process.env.E2E_BASE ?? 'http://localhost:5173/';
+
+const URL = process.argv[2] ?? BASE;
 
 let failures = 0;
 const check = (label, ok, extra = '') => {
@@ -126,7 +130,7 @@ await page.waitForSelector('.drill');
 await page.waitForSelector('.drill__status:has-text("Your move")', { timeout: 8000 });
 await page.locator('[data-square="d2"]').click();
 await page.locator('[data-square="d4"]').click();
-await page.waitForSelector('.drill__status[data-kind="right"]', { timeout: 5000 });
+await page.waitForSelector('.drill__status[data-kind="note"]', { timeout: 5000 });
 const noteInDrill = await page.locator('.drill__note').textContent();
 check('imported note surfaces during drilling', noteInDrill.includes('queen pawn'), `"${noteInDrill}"`);
 

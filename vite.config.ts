@@ -44,12 +44,33 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,webmanifest}'],
+        // The engine is 7.3 MB and most sessions never turn it on, so it must
+        // not be part of the install download. It is cached on first use
+        // instead (see runtimeCaching below).
+        globIgnores: ['**/engine/**'],
         // Everything is client-side, so any navigation resolves to the shell.
         navigateFallback: 'index.html',
-        // The whole point of installing is drilling on a train with no signal;
-        // API calls to chess.com and Lichess are deliberately left uncached so
-        // they fail honestly offline rather than serving stale games.
-        runtimeCaching: [],
+        // Not a route the shell can render: the engine worker must load its
+        // real file, not index.html, or it fails with a syntax error that
+        // looks nothing like the missing-asset problem it actually is.
+        navigateFallbackDenylist: [/^\/?engine\//],
+        runtimeCaching: [
+          {
+            // Once the engine has been downloaded once, keep it — it is a
+            // versioned immutable artifact, so CacheFirst is exactly right
+            // and analysis then works offline like the rest of the app.
+            //
+            // API calls to chess.com and Lichess remain deliberately uncached:
+            // they should fail honestly offline rather than serve stale games.
+            urlPattern: /\/engine\/[^/]+\.(?:js|wasm)$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'engine',
+              expiration: { maxEntries: 4 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+        ],
       },
     }),
   ],

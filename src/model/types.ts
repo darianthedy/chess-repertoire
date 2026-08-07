@@ -94,6 +94,24 @@ export interface Collection {
   games: StoredGame[];
 }
 
+/**
+ * Engine preferences.
+ *
+ * Off by default and remembered per device rather than assumed: turning it on
+ * costs a 7 MB download, and someone drilling on mobile data should opt into
+ * that once, knowingly.
+ */
+export interface EngineSettings {
+  enabled: boolean;
+  /** Search depth. 18 is a second or so per position on the WASM build. */
+  depth: number;
+}
+
+export const DEFAULT_ENGINE_SETTINGS: EngineSettings = {
+  enabled: false,
+  depth: 18,
+};
+
 export interface AppState {
   version: 1;
   slots: Slot[];
@@ -107,6 +125,14 @@ export interface AppState {
   cards: Record<string, CardState>;
   /** Consecutive days with a completed session. */
   streak: { count: number; lastDate: string } | null;
+  /**
+   * When each repertoire was last drilled, keyed by id. Drives the
+   * least-recently-drilled weighting in the puzzle picker; absent means never,
+   * which is the strongest claim on the next puzzle.
+   */
+  lastDrilled: Record<string, number>;
   /** Chess.com handle, remembered so game review is one click. */
   chesscomUsername?: string;
+  /** Absent on stores predating engine support; treated as the default. */
+  engine?: EngineSettings;
 }

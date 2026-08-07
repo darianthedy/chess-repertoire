@@ -36,8 +36,11 @@ Everything else is out of scope until those two are used daily for a month.
 
 Explicitly NOT building:
 
-- ❌ A chess engine or move-legality logic (use `chess.js`)
-- ❌ Engine analysis / evaluation bars
+- ❌ A chess engine or move-legality logic (use `chess.js`, and Stockfish as-is)
+- ~~❌ Engine analysis / evaluation bars~~ — **revised, see F8.** Shipped as an
+  opt-in reviewing aid, deliberately excluded from drills. The original ban was
+  right about the risk and wrong about the scope: the danger is an engine
+  *during recall*, not an engine while reading a game.
 - ❌ Opponent prep, game database, or master-games search
 - ❌ Accounts, sync, multi-user, sharing
 - ❌ A custom spaced-repetition algorithm (use stock SM-2)
@@ -107,13 +110,33 @@ generate an unanswerable card. Scoping the key to the repertoire keeps
 transpositions collapsing *within* a tree (the useful behaviour) while isolating
 alternatives *across* trees (the correct behaviour).
 
-**Design decision — a global daily cap, not a per-repertoire one.** The queue is
-one shared pool across all card-generating repertoires, capped at a target
-session length (default ~15 min ≈ 40–60 cards), drawn most-overdue-first. Adding
-a repertoire does *not* silently multiply my daily workload — it dilutes
-attention across a fixed budget. The app surfaces the review-debt trend so that
-cost is visible immediately rather than discovered three weeks later as a
-200-card backlog.
+**Design decision — no session queue and no daily cap; draw puzzles endlessly.**
+An earlier design assembled a capped queue of due cards up front and ended the
+session when it emptied. In practice that made the app refuse work: on a day
+with nothing due there was nothing to do, and on a good day the drill stopped
+before I wanted it to. Drilling is now open-ended — a session starts whenever,
+puzzles are drawn one at a time, and it ends when I stop it.
+
+Randomness carries the load the cap used to. Each draw is two-stage:
+
+1. **Pick the repertoire**, weighted by how long it has been since it last came
+   up — least-recently-drilled highest, saturating after a week and never
+   reaching zero. `trial` repertoires draw at half weight. Picking the
+   repertoire *before* the position is what makes this weighting mean anything;
+   one flat pool would hand every session to whichever tree has the most
+   positions. Recency is recorded as puzzles are drilled, so a session rotates
+   across openings by itself.
+2. **Pick the position within it**, weighted by SM-2 state: unseen and overdue
+   positions dominate, and a well-known one keeps a small but non-zero share.
+   Due dates still steer what comes up — they just no longer gate whether
+   anything comes up at all.
+
+Recently drawn positions are held out of the next few draws, so a short session
+on a small repertoire doesn't loop over the same handful of puzzles.
+
+Adding a repertoire therefore still doesn't multiply the workload — the workload
+is however long I choose to sit there. It dilutes *attention within a session*,
+which is the same dilution the cap provided, without the refusal to work.
 
 **Rules encoded in the UI (warn, don't block):**
 - At most one repertoire in `trial` at a time.
@@ -249,15 +272,18 @@ The core loop. **The unit of practice is a whole line, not a single position.**
   it is the exact skill a real game demands.
 - If it's the opponent's move, the app plays it. Then I move. Then it replies.
   Back and forth, automatically, no clicking "next".
-- **Correct** → the move plays, brief green, the opponent's reply comes back
-  immediately. Flow is unbroken.
+- **Correct** → the move plays and the opponent's reply comes back immediately.
+  No "Correct" card, no confirmation step, nothing to acknowledge. Being right is
+  the unremarkable case; only a miss is worth stopping for.
 - **Wrong** → red, show the correct move and its note. Then **continue the line
   from the correct move** — never restart. Restarting punishes with repetition of
   what I already knew.
 - The line ends when the tree ends. Show the **terminal plan note** — "castle
   short, play …c5, pressure the d-file" — which is the actual payload of the
   whole exercise.
-- Session ends when the due queue is empty. Target: **10–15 min**.
+- The session doesn't end on its own — the next puzzle is always drawn. Ending
+  is a decision, not a queue running out. Target: **10–15 min**, honoured by
+  stopping, not by being stopped.
 
 **Design decision — present as lines, schedule as positions.**
 Naively, one line = one card. That's coarse: a 12-move line gets a single grade,
@@ -265,8 +291,8 @@ so a move I know cold is re-drilled at the same rate as the one move I keep
 missing, and SM-2 loses all its resolution.
 
 Instead: SM-2 state lives on **positions** (the F3 card model), but positions are
-never presented alone. The scheduler picks the most-overdue position, then walks
-the *whole line containing it* from the start. Every position along the way is
+never presented alone. The picker draws a position, then walks the *whole line
+containing it* from the start. Every position along the way is
 graded in passing. Known moves cost two seconds and get their intervals pushed
 out; the weak position in the middle gets a real grade. I get sequence practice;
 the algorithm gets per-move resolution.
@@ -348,6 +374,42 @@ than negligent.
 **Requires:** my rating band and primary time control, set once in preferences.
 The explorer is worthless unfiltered — masters-database frequencies describe an
 opening landscape I will never encounter.
+
+### F8 — Engine analysis (opt-in, and never mid-drill)
+
+Stockfish, cross-referenced against the repertoire rather than presented raw.
+
+**Where it is allowed:**
+
+- **Reading a collection game.** Eval bar beside the board and the top few lines,
+  each tagged with whether the repertoire already holds it. The headline is a
+  sentence answering *should I change anything*, not a number. Engine
+  suggestions can be walked into even when the game never played them.
+- **After a drill session.** The positions missed, each showing what was played,
+  what the book wanted, and what each cost.
+
+**Where it is banned:** during a drill. A drill is a recall test, and an eval on
+screen turns it into a reading test — you work backwards from the bar to the
+move instead of remembering it, and the card gets graded on the wrong skill.
+This is not a UI preference; it is the reason the feature is split in two.
+
+**Design constraints that fell out of the platform:**
+
+- Single-threaded WASM build (`lite-single`, 7.3 MB). Multi-threaded Stockfish
+  needs `SharedArrayBuffer`, which needs COOP/COEP headers, which GitHub Pages
+  cannot set. Faking them with a second service worker would fight the PWA's own.
+- Off by default, fetched on first use, then cached — including offline. Nobody
+  drilling on mobile data should pay 7 MB they did not ask for.
+- Move quality is judged in **win percentage, not centipawns**. The same 60cp
+  swing is a real error near equality and nothing at all in a won position.
+- A move outside the top-N list is reported as **unrated, not bad** — except in
+  the mistake review, where the book move gets a second search, because there
+  its cost is the only number that matters and a blank reads as a verdict.
+
+*Rationale: the engine is here to audit the repertoire, not to replace judgement
+about it. "Stockfish prefers something else" is the beginning of a question, not
+an instruction — most opening choices are within noise of best, and the panel
+says so plainly rather than manufacturing a reason to change.*
 
 ### Depth policy
 
@@ -500,9 +562,9 @@ exceed this considerably; these numbers describe daily workload only.
 
 Total active: **~370–490 cards**, settling to roughly 12–18 reviews/day once
 mature — a ~12–15 minute daily session, which is the budget the whole design is
-built around. Raising active depth later increases this; the global daily cap
-absorbs the spike by spreading it over more days rather than lengthening
-sessions.
+built around. That budget is now kept by choosing to stop rather than by a cap:
+raising active depth adds positions to the pool the picker draws from, which
+changes what comes up, not how long I sit there.
 
 **Only one slot has alternatives, and it's the cheap kind.** London and 1.e4
 diverge at move 1 — no shared positions, no contradictory cards, and the choice

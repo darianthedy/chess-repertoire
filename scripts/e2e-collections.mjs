@@ -7,8 +7,12 @@
 import { readFileSync } from 'node:fs';
 import { chromium } from 'playwright';
 
+// The dev server picks the next free port when 5173 is taken, so allow an
+// override rather than silently testing someone else's checkout.
+const BASE = process.env.E2E_BASE ?? 'http://localhost:5173/';
+
 const FILE = process.argv[2];
-const URL = process.argv[3] ?? 'http://localhost:5173/';
+const URL = process.argv[3] ?? BASE;
 if (!FILE) {
   console.error('usage: node scripts/e2e-collections.mjs <file.pgn> [url]');
   process.exit(2);
