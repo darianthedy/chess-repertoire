@@ -8,7 +8,14 @@ import type { AppState, Repertoire, RepertoireState, Side } from '../model/types
 interface Props {
   state: AppState;
   setState: React.Dispatch<React.SetStateAction<AppState | null>>;
+  /** Open an existing repertoire — its lines, so it can be read before edited. */
   onOpen: (id: string) => void;
+  /**
+   * Open a repertoire that has just been created. Straight to the board, not the
+   * line list: a new tree has no lines to read, and an empty screen between
+   * "Create" and the first move is pure friction.
+   */
+  onCreate: (id: string) => void;
   onStartSession: () => void;
   onReviewGames: () => void;
 }
@@ -19,6 +26,7 @@ export function RepertoireList({
   state,
   setState,
   onOpen,
+  onCreate,
   onStartSession,
   onReviewGames,
 }: Props) {
@@ -38,7 +46,7 @@ export function RepertoireList({
     setState((s) => (s ? { ...s, repertoires: [...s.repertoires, rep] } : s));
     setName('');
     setAddingTo(null);
-    onOpen(rep.id);
+    onCreate(rep.id);
   };
 
   const patch = (id: string, fields: Partial<Repertoire>) => {

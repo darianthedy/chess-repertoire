@@ -13,6 +13,9 @@ import {
   getNode,
   isMyTurn,
   positionCount,
+  positionsLostByRemoving,
+  promoteMove,
+  replaceMove,
   setPlan,
   tryMove,
   updateNote,
@@ -25,14 +28,25 @@ interface Props {
   rep: Repertoire;
   onChange: (fn: (rep: Repertoire) => Repertoire) => void;
   onBack: () => void;
+  /** Where `onBack` goes, so the trail back out reads honestly. */
+  backLabel?: string;
   /** Open directly at a position — used when fixing a gap found in a game. */
   initialPath?: PathStep[];
 }
 
-export function Editor({ rep, onChange, onBack, initialPath }: Props) {
+export function Editor({
+  rep,
+  onChange,
+  onBack,
+  backLabel = '← All repertoires',
+  initialPath,
+}: Props) {
   const [path, setPath] = useState<PathStep[]>(initialPath ?? []);
   const [draftNote, setDraftNote] = useState('');
   const [editingSan, setEditingSan] = useState<string | null>(null);
+  // The move being swapped out, if any. The replacement is played on the board
+  // rather than typed, so illegal choices can't be expressed in the first place.
+  const [replacing, setReplacing] = useState<string | null>(null);
   // Defaults to the side I play here, which is right almost always — but a
   // repertoire is also worth looking at from the opponent's side when working
   // out why a move is annoying to face.
@@ -52,6 +66,7 @@ export function Editor({ rep, onChange, onBack, initialPath }: Props) {
     setPath(steps);
     setDraftNote('');
     setEditingSan(null);
+    setReplacing(null);
   }, []);
 
   /**
@@ -64,18 +79,41 @@ export function Editor({ rep, onChange, onBack, initialPath }: Props) {
    */
   const handleMove = useCallback(
     (san: string): boolean => {
+      const to = tryMove(fen, san);
+      if (!to) return false;
+
+      if (replacing) {
+        // Playing the move that's already there is how you back out.
+        if (san !== replacing) {
+          // Only reachable through the old move, so only this much is at risk —
+          // a position that transposes in elsewhere survives and isn't counted.
+          const lost = positionsLostByRemoving(rep, fen, replacing);
+          if (
+            lost > 1 &&
+            !confirm(
+              `Replace ${replacing} with ${san}? ${lost - 1} position${
+                lost === 2 ? '' : 's'
+              } after ${replacing} are reachable no other way and will be deleted.`,
+            )
+          ) {
+            return false;
+          }
+          onChange((r) => replaceMove(r, fen, replacing, san));
+        }
+        navigateTo([...path, { san, fen: to }]);
+        return true;
+      }
+
       const existing = node.moves.find((m) => m.san === san);
       if (existing) {
         navigateTo([...path, { san, fen: existing.to }]);
         return true;
       }
-      const to = tryMove(fen, san);
-      if (!to) return false;
       onChange((r) => addMove(r, fen, san, ''));
       navigateTo([...path, { san, fen: to }]);
       return true;
     },
-    [fen, navigateTo, node.moves, onChange, path],
+    [fen, navigateTo, node.moves, onChange, path, rep, replacing],
   );
 
   const pairs = useMemo(() => groupIntoPairs(path), [path]);
@@ -160,7 +198,7 @@ export function Editor({ rep, onChange, onBack, initialPath }: Props) {
     <div className="editor">
       <header className="editor__bar">
         <button className="link" onClick={onBack}>
-          ← All repertoires
+          {backLabel}
         </button>
         <div className="editor__title">
           <strong>{rep.name}</strong>
@@ -238,6 +276,16 @@ export function Editor({ rep, onChange, onBack, initialPath }: Props) {
         </section>
       )}
 
+      {replacing && (
+        <p className="card card--accent small replacing">
+          Replacing <strong>{replacing}</strong> — play its replacement on the
+          board.{' '}
+          <button className="link" onClick={() => setReplacing(null)}>
+            Cancel
+          </button>
+        </p>
+      )}
+
       <div className="editor__layout">
         <div className="editor__board">
           <MoveBoard
@@ -311,7 +359,7 @@ export function Editor({ rep, onChange, onBack, initialPath }: Props) {
                 </p>
               ) : (
                 <ul className="moves">
-                  {node.moves.map((m) => (
+                  {node.moves.map((m, i) => (
                     <li key={m.san} className="moves__item">
                       <div className="moves__head">
                         <button
@@ -321,6 +369,31 @@ export function Editor({ rep, onChange, onBack, initialPath }: Props) {
                           }
                         >
                           {m.san}
+                        </button>
+                        {/* Outside the SAN button on purpose: the badge is a
+                            property of the row, not part of the move's name. */}
+                        {i === 0 && node.moves.length > 1 && (
+                          <span className="tag">main</span>
+                        )}
+                        {i > 0 && (
+                          <button
+                            className="icon"
+                            title="Make this the main line"
+                            onClick={() =>
+                              onChange((r) => promoteMove(r, fen, m.san))
+                            }
+                          >
+                            ↑
+                          </button>
+                        )}
+                        <button
+                          className="icon"
+                          title="Replace this move with a different one"
+                          onClick={() =>
+                            setReplacing(replacing === m.san ? null : m.san)
+                          }
+                        >
+                          ⇄
                         </button>
                         <button
                           className="icon"
@@ -338,9 +411,16 @@ export function Editor({ rep, onChange, onBack, initialPath }: Props) {
                           className="icon icon--danger"
                           title="Delete this move and everything after it"
                           onClick={() => {
+                            const lost = positionsLostByRemoving(
+                              rep,
+                              fen,
+                              m.san,
+                            );
                             if (
                               confirm(
-                                `Delete ${m.san} and any lines only reachable through it?`,
+                                `Delete ${m.san}? ${lost} position${
+                                  lost === 1 ? '' : 's'
+                                } are reachable no other way and will go with it.`,
                               )
                             ) {
                               onChange((r) => deleteMove(r, fen, m.san));

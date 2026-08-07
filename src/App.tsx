@@ -12,11 +12,13 @@ import { Editor } from './ui/Editor';
 import { Games } from './ui/Games';
 import { GameView } from './ui/GameView';
 import { RepertoireList } from './ui/RepertoireList';
+import { Variations } from './ui/Variations';
 import './App.css';
 
 type View =
   | { name: 'list' }
-  | { name: 'editor'; repertoireId: string; path?: PathStep[] }
+  | { name: 'variations'; repertoireId: string }
+  | { name: 'editor'; repertoireId: string; path?: PathStep[]; fromList?: boolean }
   | { name: 'collections' }
   | { name: 'collection'; collectionId: string }
   | { name: 'game'; collectionId: string; gameId: string }
@@ -180,17 +182,53 @@ export default function App() {
     }
   }
 
-  if (view.name === 'editor') {
+  if (view.name === 'variations') {
     const rep = state.repertoires.find((r) => r.id === view.repertoireId);
     if (rep) {
       return (
         <main className="app">
+          <Variations
+            rep={rep}
+            onOpen={(path) =>
+              setView({
+                name: 'editor',
+                repertoireId: rep.id,
+                path,
+                fromList: true,
+              })
+            }
+            onNew={() =>
+              setView({ name: 'editor', repertoireId: rep.id, fromList: true })
+            }
+            onBack={() => setView({ name: 'list' })}
+          />
+        </main>
+      );
+    }
+  }
+
+  if (view.name === 'editor') {
+    const rep = state.repertoires.find((r) => r.id === view.repertoireId);
+    if (rep) {
+      const fromList = view.fromList ?? false;
+      return (
+        <main className="app">
           <Editor
-            key={rep.id + (view.path?.length ?? 0)}
+            // Remounting on a path change is what makes "open this line" reset
+            // the board; two different lines can share a length, so key on the
+            // moves rather than the depth.
+            key={rep.id + ':' + (view.path?.map((s) => s.san).join(' ') ?? '')}
             rep={rep}
             initialPath={view.path}
             onChange={onChange}
-            onBack={() => setView({ name: 'list' })}
+            backLabel={fromList ? '← Lines' : '← All repertoires'}
+            onBack={() =>
+              setView(
+                fromList
+                  ? { name: 'variations', repertoireId: rep.id }
+                  : { name: 'list' },
+              )
+            }
           />
         </main>
       );
@@ -202,7 +240,8 @@ export default function App() {
       <RepertoireList
         state={state}
         setState={setState}
-        onOpen={(repertoireId) => setView({ name: 'editor', repertoireId })}
+        onOpen={(repertoireId) => setView({ name: 'variations', repertoireId })}
+        onCreate={(repertoireId) => setView({ name: 'editor', repertoireId })}
         onStartSession={startSession}
         onReviewGames={() => setView({ name: 'collections' })}
       />
