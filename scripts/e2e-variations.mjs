@@ -9,7 +9,9 @@
  */
 import { chromium } from 'playwright';
 
-const URL = process.argv[2] ?? 'http://localhost:5173/';
+// The dev server picks the next free port when 5173 is taken, so allow an
+// override rather than silently testing someone else's checkout.
+const URL = process.argv[2] ?? process.env.E2E_BASE ?? 'http://localhost:5173/';
 
 let failures = 0;
 const check = (label, ok, extra = '') => {
@@ -119,7 +121,7 @@ check(
 );
 check(
   'the terminal plan box is right there',
-  (await page.locator('aside textarea').count()) === 1,
+  (await page.locator('.editor__plan').count()) === 1,
 );
 check(
   'the editor shows the name already given to this line',
@@ -129,7 +131,7 @@ check(
 // Renaming from the editor is the same field, and lands in the same place.
 await page.locator('.editor__name').fill('King’s Indian setup');
 
-await page.locator('aside textarea').fill('castle short, hit d4 with ...c5');
+await page.locator('.editor__plan').fill('castle short, hit d4 with ...c5');
 await page.getByRole('button', { name: '← Lines' }).click();
 await page.waitForSelector('.vars');
 check(
@@ -155,7 +157,7 @@ await page.getByRole('button', { name: '← Back' }).click();
 await page.getByRole('button', { name: '← Back' }).click();
 
 await page
-  .locator('.moves__item', { hasText: 'c4' })
+  .locator('.line__choice', { hasText: 'c4' })
   .getByTitle('Replace this move with a different one')
   .click();
 await page.waitForSelector('.replacing');
@@ -191,9 +193,9 @@ await page.locator('.var', { hasText: '3.g3' }).click();
 await page.waitForSelector('.editor__layout');
 await page.getByRole('button', { name: '« Start' }).click();
 // The branch is after 1.d4, so step into it before reordering the replies.
-await page.locator('.moves__san', { hasText: 'd4' }).click();
+await page.locator('.line__next', { hasText: 'd4' }).click();
 await page
-  .locator('.moves__item', { hasText: 'Nf6' })
+  .locator('.line__choice', { hasText: 'Nf6' })
   .getByTitle('Make this the main line')
   .click();
 await page.getByRole('button', { name: '← Lines' }).click();

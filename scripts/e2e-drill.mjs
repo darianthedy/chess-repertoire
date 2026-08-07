@@ -77,11 +77,11 @@ for (const [f, t] of [
 }
 check('five moves entered', (await page.locator('.line__san').count()) === 5);
 
-// Annotate the first move so the drill has a note to surface.
+// Annotate the first move so the drill has a note to surface. The note editor
+// is pointed at the move you're standing on, so walk back to 1.d4 itself.
 await page.getByRole('button', { name: '« Start' }).click();
-await page.locator('.moves__item button[title="Edit note"]').first().click();
-await page.locator('.moves__edit textarea').fill('Queen pawn, heading for the London setup');
-await page.getByRole('button', { name: 'Save' }).click();
+await page.locator('.line__next', { hasText: 'd4' }).first().click();
+await page.locator('.notes__edit').fill('Queen pawn, heading for the London setup');
 
 await page.getByRole('button', { name: '← All repertoires' }).click();
 await page.waitForSelector('.home');
