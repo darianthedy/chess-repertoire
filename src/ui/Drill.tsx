@@ -247,6 +247,9 @@ export function Drill({ state, first, onGrade, onDrilled, onDone }: Props) {
   );
 
   const plan = atEnd ? getNode(rep, fen).plan : undefined;
+  // Only at the end, for the same reason the header stays anonymous: naming the
+  // line mid-puzzle would hand over the answer.
+  const lineName = atEnd ? getNode(rep, fen).name : undefined;
 
   if (finished) {
     const total = tally.right + tally.wrong;
@@ -332,7 +335,7 @@ export function Drill({ state, first, onGrade, onDrilled, onDone }: Props) {
         )}
         {atEnd && (
           <>
-            <strong>End of line</strong>
+            <strong>{lineName ?? 'End of line'}</strong>
             {plan ? (
               <span className="drill__note">{plan}</span>
             ) : (

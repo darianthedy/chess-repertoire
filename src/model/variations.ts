@@ -15,6 +15,8 @@ export interface Variation {
   /** Stable identity for list keys: the SAN sequence. */
   id: string;
   steps: PathStep[];
+  /** What I call this line, if I've named it. */
+  name?: string;
   /** Terminal plan on the final position, if one has been written. */
   plan?: string;
   /** Moves of mine along this line. */
@@ -106,10 +108,13 @@ function summarize(
     if (edge.note.trim()) noted++;
   }
 
+  const last = rep.nodes[steps[steps.length - 1].fen];
+
   return {
     id: steps.map((s) => s.san).join(' '),
     steps,
-    plan: rep.nodes[steps[steps.length - 1].fen]?.plan,
+    name: last?.name,
+    plan: last?.plan,
     mine,
     noted,
     main,

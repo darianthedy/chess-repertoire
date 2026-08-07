@@ -33,9 +33,13 @@ export default function App() {
   const { state, setState, updateRepertoire } = useAppState();
   const [view, setView] = useState<View>({ name: 'list' });
 
+  // Both repertoire screens edit the tree — the editor a move at a time, the
+  // line list by naming a variation — so the target is whichever of them is up.
   const onChange = useCallback(
     (fn: Parameters<typeof updateRepertoire>[1]) => {
-      if (view.name === 'editor') updateRepertoire(view.repertoireId, fn);
+      if (view.name === 'editor' || view.name === 'variations') {
+        updateRepertoire(view.repertoireId, fn);
+      }
     },
     [updateRepertoire, view],
   );
@@ -200,6 +204,7 @@ export default function App() {
             onNew={() =>
               setView({ name: 'editor', repertoireId: rep.id, fromList: true })
             }
+            onChange={onChange}
             onBack={() => setView({ name: 'list' })}
           />
         </main>

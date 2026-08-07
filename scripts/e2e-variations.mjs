@@ -75,7 +75,29 @@ check(
   (await page.locator('.var .tag--warn').count()) === 3,
 );
 
+// --- naming a line from the list -------------------------------------------
+const kid = page.locator('.vars__row', { hasText: '1.d4 Nf6 2.Bf4 g6 3.Nf3 Bg7' });
+await kid.getByRole('button', { name: '+ Name' }).click();
+await kid.locator('.var__naming input').fill('KID setup');
+await kid.getByRole('button', { name: 'Save' }).click();
+check(
+  'the name shows on the line it was given to',
+  (await kid.locator('.var__name').textContent()) === 'KID setup',
+);
+check(
+  'naming one line leaves the others unnamed',
+  (await page.locator('.var__name').count()) === 1,
+  `${await page.locator('.var__name').count()}`,
+);
+
 // --- filtering --------------------------------------------------------------
+await page.locator('.vars__filters input[type=text]').fill('KID set');
+check(
+  'the filter finds a line by its name',
+  (await page.locator('.var').count()) === 1,
+  `${await page.locator('.var').count()}`,
+);
+
 await page.locator('.vars__filters input[type=text]').fill('c4');
 check(
   'filter narrows to matching lines',
@@ -99,6 +121,13 @@ check(
   'the terminal plan box is right there',
   (await page.locator('aside textarea').count()) === 1,
 );
+check(
+  'the editor shows the name already given to this line',
+  (await page.locator('.editor__name').inputValue()) === 'KID setup',
+);
+
+// Renaming from the editor is the same field, and lands in the same place.
+await page.locator('.editor__name').fill('King’s Indian setup');
 
 await page.locator('aside textarea').fill('castle short, hit d4 with ...c5');
 await page.getByRole('button', { name: '← Lines' }).click();
@@ -111,6 +140,11 @@ check(
 check(
   'that line no longer counts as unfinished',
   (await page.locator('.var .tag--warn').count()) === 2,
+);
+check(
+  'the rename done in the editor shows on the line',
+  (await page.locator('.var__name').textContent()) === 'King’s Indian setup',
+  await page.locator('.var__name').textContent(),
 );
 
 // --- replacing a move inside an existing line -------------------------------

@@ -16,6 +16,7 @@ import {
   positionsLostByRemoving,
   promoteMove,
   replaceMove,
+  setLineName,
   setPlan,
   tryMove,
   updateNote,
@@ -471,6 +472,19 @@ export function Editor({
 
           {node.moves.length === 0 && path.length > 0 && (
             <section className="card">
+              <h2>This line</h2>
+              <label className="field">
+                <span>Name</span>
+                <input
+                  type="text"
+                  className="editor__name"
+                  placeholder="e.g. Jobava London, Exchange Slav"
+                  value={node.name ?? ''}
+                  onChange={(e) =>
+                    onChange((r) => setLineName(r, fen, e.target.value))
+                  }
+                />
+              </label>
               <h2>Plan</h2>
               <p className="muted small">
                 This line ends here. A line ends at a plan, not a move count.

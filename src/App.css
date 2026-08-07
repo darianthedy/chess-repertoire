@@ -392,6 +392,31 @@ textarea {
   flex-direction: column;
   gap: 0.5rem;
 }
+.vars__row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: start;
+  gap: 0.4rem;
+}
+.var__naming {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+.var__naming input {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+/* Both labels sized alike, so naming a line doesn't shift the column. */
+.var__rename {
+  white-space: nowrap;
+  align-self: center;
+  min-width: 5.5rem;
+  font-size: 0.8rem;
+  padding: 0.35rem 0.5rem;
+}
 .var {
   width: 100%;
   display: flex;
@@ -406,6 +431,11 @@ textarea {
 }
 .var:hover {
   background: var(--surface);
+}
+.var__name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
 }
 .var__moves {
   font-size: 0.88rem;

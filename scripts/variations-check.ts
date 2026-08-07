@@ -7,6 +7,7 @@ import {
   positionsLostByRemoving,
   promoteMove,
   replaceMove,
+  setLineName,
   setPlan,
   tryMove,
 } from '../src/model/tree';
@@ -50,6 +51,28 @@ check(
   listVariations(rep).variations[0].plan === 'squeeze the c-file',
 );
 
+// --- 1b. naming a line ------------------------------------------------------
+check('no name until one is given', listVariations(rep).variations[0].name === undefined);
+
+rep = setLineName(rep, end, '  Jobava London  ');
+check(
+  'name surfaces on the variation, trimmed',
+  listVariations(rep).variations[0].name === 'Jobava London',
+  `${listVariations(rep).variations[0].name}`,
+);
+check(
+  'naming leaves the plan alone',
+  listVariations(rep).variations[0].plan === 'squeeze the c-file',
+);
+check(
+  'clearing a name drops it rather than storing whitespace',
+  setLineName(rep, end, '   ').nodes[end].name === undefined,
+);
+check(
+  'naming changes nothing structural',
+  positionCount(setLineName(rep, end, 'x')) === positionCount(rep),
+);
+
 // --- 2. a branch splits into two variations ---------------------------------
 // A second black reply to 1.d4 branches at ply 1; both lines are listed, and
 // only the one taking the first edge at every branch is the main line.
@@ -64,6 +87,13 @@ check(
   'main line is the first-listed branch',
   list.variations.find((v) => v.main)?.id === 'd4 d5 Bf4',
   list.variations.find((v) => v.main)?.id,
+);
+// The name lives on the line's own terminal position, so a sibling sharing a
+// prefix must not inherit it.
+check(
+  'a name belongs to one line, not its neighbours',
+  list.variations.find((v) => v.id === 'd4 d5 Bf4')?.name === 'Jobava London' &&
+    list.variations.find((v) => v.id === 'd4 Nf6 Bf4')?.name === undefined,
 );
 
 // --- 3. promoting flips which line is main ----------------------------------

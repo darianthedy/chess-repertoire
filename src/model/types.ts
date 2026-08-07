@@ -45,6 +45,16 @@ export interface TreeNode {
    * the d-file". A line ends at a plan, not a move count (PRODUCT.md §6).
    */
   plan?: string;
+  /**
+   * What I call the line that ends here — "Jobava London", "Exchange, Nge2
+   * setup". Stored beside the plan on the terminal position for the same
+   * reason: a variation isn't an object in the store, it's a path through the
+   * tree, and its last position is the only thing unique to it.
+   *
+   * A name, unlike movetext, is how the line is actually recalled and
+   * discussed, so it is the handle for finding it again.
+   */
+  name?: string;
 }
 
 export interface Repertoire {
