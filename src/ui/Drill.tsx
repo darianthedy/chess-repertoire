@@ -9,16 +9,21 @@ import { MoveBoard } from './MoveBoard';
 
 /** Pause before the opponent replies, so a move is seen rather than teleporting. */
 const REPLY_MS = 450;
-/** How long a correct move's note stays up before moving on. */
-const ADVANCE_MS = 550;
 /** Puzzles to put between a miss and its retry, so the answer isn't just echoed. */
 const RETRY_GAP = 3;
 /** Ceiling on lines waiting to be retried, so a bad run can't build a backlog. */
 const MAX_RETRIES = 10;
 
+/**
+ * A correct move gets no confirmation step and nothing to acknowledge — the move
+ * plays and the line carries on. Being right is the unremarkable case, and a
+ * "Correct" card between every move doubled how long a line took to walk. Its
+ * note still rides along in 'note', shown beside the opponent's reply instead of
+ * holding the loop up for it. Only a miss stops the drill.
+ */
 type Feedback =
   | { kind: 'none' }
-  | { kind: 'right'; note: string }
+  | { kind: 'note'; note: string }
   | { kind: 'wrong'; san: string; note: string };
 
 interface Props {
@@ -178,17 +183,17 @@ export function Drill({ state, first, onGrade, onDrilled, onDone }: Props) {
       if (san === expected.san) {
         const edge = getNode(rep, fen).moves.find((m) => m.san === san);
         if (isGraded) grade(true);
-        setFeedback({ kind: 'right', note: edge?.note ?? '' });
-        setTimeout(advance, ADVANCE_MS);
+        setFeedback(edge?.note ? { kind: 'note', note: edge.note } : { kind: 'none' });
+        setPly((p) => p + 1);
         return true;
       }
 
       const swapped = divergence(san);
       if (swapped) {
         if (isGraded) grade(true);
-        setFeedback({ kind: 'right', note: '' });
+        setFeedback({ kind: 'none' });
         setLine(swapped);
-        setTimeout(advance, ADVANCE_MS);
+        setPly((p) => p + 1);
         return true;
       }
 
@@ -199,7 +204,7 @@ export function Drill({ state, first, onGrade, onDrilled, onDone }: Props) {
       setFeedback({ kind: 'wrong', san: expected.san, note: edge?.note ?? '' });
       return false;
     },
-    [advance, atEnd, divergence, expected, fen, finished, grade, isGraded, myMove, rep],
+    [atEnd, divergence, expected, fen, finished, grade, isGraded, myMove, rep],
   );
 
   const plan = atEnd ? getNode(rep, fen).plan : undefined;
@@ -258,11 +263,8 @@ export function Drill({ state, first, onGrade, onDrilled, onDone }: Props) {
       </div>
 
       <div className="drill__status" data-kind={feedback.kind}>
-        {feedback.kind === 'right' && (
-          <>
-            <strong>Correct</strong>
-            {feedback.note && <span className="drill__note">{feedback.note}</span>}
-          </>
+        {feedback.kind === 'note' && !atEnd && (
+          <span className="drill__note">{feedback.note}</span>
         )}
         {feedback.kind === 'wrong' && (
           <>

@@ -462,9 +462,6 @@ textarea {
   align-items: flex-start;
   background: var(--surface);
 }
-.drill__status[data-kind='right'] {
-  border-color: #3d9a5c;
-}
 .drill__status[data-kind='wrong'] {
   border-color: #d64545;
 }
