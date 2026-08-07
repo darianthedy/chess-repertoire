@@ -196,6 +196,26 @@ export function setPlan(
 }
 
 /**
+ * Name the line that ends at this position. Clearing it removes the field
+ * rather than storing an empty string, so "unnamed" has one representation.
+ */
+export function setLineName(
+  rep: Repertoire,
+  fen: string,
+  name: string,
+): Repertoire {
+  const node = getNode(rep, fen);
+  const trimmed = name.trim();
+  return {
+    ...rep,
+    nodes: {
+      ...rep.nodes,
+      [fen]: { ...node, fen, name: trimmed ? trimmed : undefined },
+    },
+  };
+}
+
+/**
  * Remove an edge, then drop every node no longer reachable from the root.
  *
  * Reachability is the right test rather than deleting the subtree outright:

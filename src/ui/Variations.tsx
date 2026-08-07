@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { positionCount } from '../model/tree';
+import { positionCount, setLineName } from '../model/tree';
 import type { PathStep } from '../model/tree';
 import {
   listVariations,
@@ -15,6 +15,7 @@ interface Props {
   onOpen: (steps: PathStep[]) => void;
   /** Open the editor at the starting position, to begin a new line. */
   onNew: () => void;
+  onChange: (fn: (rep: Repertoire) => Repertoire) => void;
   onBack: () => void;
 }
 
@@ -26,9 +27,13 @@ interface Props {
  * Listing the lines first makes the repertoire readable, and makes editing an
  * existing variation a matter of picking it rather than navigating back to it.
  */
-export function Variations({ rep, onOpen, onNew, onBack }: Props) {
+export function Variations({ rep, onOpen, onNew, onChange, onBack }: Props) {
   const [query, setQuery] = useState('');
   const [unfinishedOnly, setUnfinishedOnly] = useState(false);
+  // Keyed by the line's terminal FEN, which is where the name is stored — an id
+  // built from the moves would go stale the moment the line is edited.
+  const [naming, setNaming] = useState<string | null>(null);
+  const [draftName, setDraftName] = useState('');
 
   const { variations, truncated } = useMemo(
     () => listVariations(rep),
@@ -41,6 +46,7 @@ export function Variations({ rep, onOpen, onNew, onBack }: Props) {
       if (unfinishedOnly && v.plan?.trim()) return false;
       if (!q) return true;
       return (
+        (v.name ?? '').toLowerCase().includes(q) ||
         variationText(v.steps).toLowerCase().includes(q) ||
         (v.plan ?? '').toLowerCase().includes(q)
       );
@@ -48,6 +54,13 @@ export function Variations({ rep, onOpen, onNew, onBack }: Props) {
   }, [query, unfinishedOnly, variations]);
 
   const unfinished = variations.filter((v) => !v.plan?.trim()).length;
+
+  const endFen = (v: { steps: PathStep[] }) => v.steps[v.steps.length - 1].fen;
+
+  const saveName = (fen: string) => {
+    onChange((r) => setLineName(r, fen, draftName));
+    setNaming(null);
+  };
 
   return (
     <div className="variations">
@@ -85,7 +98,7 @@ export function Variations({ rep, onOpen, onNew, onBack }: Props) {
             <input
               type="text"
               value={query}
-              placeholder="Filter by moves or plan — e.g. Bf4, or d-file"
+              placeholder="Filter by name, moves or plan — e.g. Jobava, Bf4, d-file"
               onChange={(e) => setQuery(e.target.value)}
             />
             <label className="vars__toggle">
@@ -112,8 +125,11 @@ export function Variations({ rep, onOpen, onNew, onBack }: Props) {
 
           <ul className="vars">
             {shown.map((v) => (
-              <li key={v.id}>
+              <li key={v.id} className="vars__row">
                 <button className="var" onClick={() => onOpen(v.steps)}>
+                  {/* The name leads when there is one: it's how the line is
+                      recalled, and the movetext is the detail underneath. */}
+                  {v.name && <span className="var__name">{v.name}</span>}
                   <span className="var__moves">{variationText(v.steps)}</span>
                   <span className="var__meta muted small">
                     {v.main && <span className="tag">main line</span>}
@@ -133,6 +149,42 @@ export function Variations({ rep, onOpen, onNew, onBack }: Props) {
                     )}
                   </span>
                 </button>
+                {/* Outside the row button, not inside it: a button can't nest
+                    inside a button, and renaming isn't "open this line". */}
+                <button
+                  className="var__rename"
+                  title={v.name ? 'Rename this line' : 'Name this line'}
+                  onClick={() => {
+                    const fen = endFen(v);
+                    setNaming(naming === fen ? null : fen);
+                    setDraftName(v.name ?? '');
+                  }}
+                >
+                  {v.name ? 'Rename' : '+ Name'}
+                </button>
+
+                {naming === endFen(v) && (
+                  <div className="var__naming">
+                    <input
+                      type="text"
+                      autoFocus
+                      value={draftName}
+                      placeholder="e.g. Jobava London, Exchange Slav"
+                      onChange={(e) => setDraftName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') saveName(endFen(v));
+                        if (e.key === 'Escape') setNaming(null);
+                      }}
+                    />
+                    <button
+                      className="primary"
+                      onClick={() => saveName(endFen(v))}
+                    >
+                      Save
+                    </button>
+                    <button onClick={() => setNaming(null)}>Cancel</button>
+                  </div>
+                )}
               </li>
             ))}
           </ul>
