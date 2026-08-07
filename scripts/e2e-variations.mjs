@@ -74,7 +74,7 @@ check(
 );
 check(
   'unfinished lines are flagged as having no plan',
-  (await page.locator('.var .tag--warn').count()) === 3,
+  (await page.locator('.var .var__noplan').count()) === 3,
 );
 
 // --- naming a line from the list -------------------------------------------
@@ -141,7 +141,7 @@ check(
 );
 check(
   'that line no longer counts as unfinished',
-  (await page.locator('.var .tag--warn').count()) === 2,
+  (await page.locator('.var .var__noplan').count()) === 2,
 );
 check(
   'the rename done in the editor shows on the line',

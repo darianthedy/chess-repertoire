@@ -131,6 +131,10 @@ export function Variations({ rep, onOpen, onNew, onChange, onBack }: Props) {
                       recalled, and the movetext is the detail underneath. */}
                   {v.name && <span className="var__name">{v.name}</span>}
                   <span className="var__moves">{variationText(v.steps)}</span>
+                  {/* One line, in a fixed order: what the line is, how big it
+                      is, how far through annotating it I am. Kept terse so it
+                      stays a single row on a phone instead of wrapping into a
+                      ragged block. */}
                   <span className="var__meta muted small">
                     {v.main && <span className="tag">main line</span>}
                     {v.cyclic && (
@@ -139,13 +143,13 @@ export function Variations({ rep, onOpen, onNew, onChange, onBack }: Props) {
                       </span>
                     )}
                     <span>{variationDepth(v.steps)} moves</span>
-                    <span>
-                      {v.noted}/{v.mine} of mine annotated
+                    <span title="Your own moves that have a note on them">
+                      {v.noted}/{v.mine} annotated
                     </span>
                     {v.plan?.trim() ? (
                       <span className="var__plan">plan: {v.plan}</span>
                     ) : (
-                      <span className="tag tag--warn">no plan</span>
+                      <span className="var__noplan">no plan</span>
                     )}
                   </span>
                 </button>
