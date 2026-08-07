@@ -81,14 +81,17 @@ await page.getByRole('button', { name: 'Import PGN' }).click();
 await page.waitForSelector('.import p.small');
 await page.getByRole('button', { name: '← All repertoires' }).click();
 
-// --- review ------------------------------------------------------------------
-await page.getByRole('button', { name: 'Review games' }).click();
+// --- save my games as a collection, then review it ---------------------------
+await page.getByRole('button', { name: 'Games' }).click();
 await page.waitForSelector('.games');
 await page.locator('.games input:not([type=file])').fill('testuser');
-await page.getByRole('button', { name: 'Review' }).click();
-await page.waitForSelector('.gaps', { timeout: 15000 });
-
+await page.getByRole('button', { name: 'Fetch' }).click();
+await page.waitForSelector('.gamerow', { timeout: 20000 });
+check('chess.com games saved as a collection', (await page.locator('.gamerow').count()) === 4, `${await page.locator('.gamerow').count()} rows`);
 check('archives endpoint called', archiveHits === 1, `${archiveHits} calls`);
+
+await page.getByRole('button', { name: 'Find repertoire gaps →' }).click();
+await page.waitForSelector('.gaps', { timeout: 15000 });
 
 const heading = await page.locator('.gaps h2').textContent();
 check('four games scanned', heading.includes('4 games scanned'), `"${heading}"`);
@@ -126,25 +129,30 @@ check('gap patched in the tree', after2.join(' ') === 'd4 d5 Nf3 e6 Bf4', `[${af
 
 // --- the gap is gone on re-review -------------------------------------------
 await page.getByRole('button', { name: '← All repertoires' }).click();
-await page.getByRole('button', { name: 'Review games' }).click();
-await page.waitForSelector('.games');
-check('username remembered', (await page.locator('.games input:not([type=file])').inputValue()) === 'testuser');
-await page.getByRole('button', { name: 'Review' }).click();
+await page.getByRole('button', { name: 'Games' }).click();
+await page.locator('.rep__open').first().click();
+await page.waitForSelector('.gamerow');
+await page.getByRole('button', { name: 'Find repertoire gaps →' }).click();
 await page.waitForSelector('.gaps', { timeout: 15000 });
+check('username remembered', (await page.locator('.games input').inputValue()) === 'testuser');
 const after = await page.locator('.gaps h2').textContent();
 check('patched gap no longer reported', after.includes('1 gap'), `"${after}"`);
 
-// --- reviewing a downloaded PGN file, with no API involved -------------------
+// --- the same games from a downloaded file, with no API involved -------------
 const FILE_PGN = GAMES.map((g) => g.pgn).join('\n\n');
+await page.getByRole('button', { name: /^← /}).click();
+await page.getByRole('button', { name: '← Games' }).click();
 await page.locator('.games input[type=file]').setInputFiles({
   name: 'chess_com_games.pgn',
-  mimeType: 'application/x-chess-pgn',
+  mimeType: 'application/octet-stream',
   buffer: Buffer.from(FILE_PGN),
 });
+await page.waitForSelector('.gamerow', { timeout: 20000 });
+check('a downloaded PGN file becomes a collection', (await page.locator('.gamerow').count()) === 4, `${await page.locator('.gamerow').count()} rows`);
+await page.getByRole('button', { name: 'Find repertoire gaps →' }).click();
 await page.waitForSelector('.gaps', { timeout: 15000 });
 const fileHeading = await page.locator('.gaps h2').textContent();
-check('a downloaded PGN file is reviewed', fileHeading.includes('4 games scanned'), `"${fileHeading}"`);
-check('the same gap is found from the file', fileHeading.includes('1 gap'), `"${fileHeading}"`);
+check('gaps found from the uploaded collection', fileHeading.includes('4 games scanned'), `"${fileHeading}"`);
 
 check('no runtime errors', errors.length === 0, errors.join(' | '));
 

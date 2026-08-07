@@ -74,10 +74,31 @@ export interface CardState {
   lapses: number;
 }
 
+/** One game held in a collection, stored as raw movetext and parsed on demand. */
+export interface StoredGame {
+  id: string;
+  headers: Record<string, string>;
+  movetext: string;
+}
+
+/**
+ * A saved PGN library — downloaded master games, an opening book, an export of
+ * my own games. Kept separate from repertoires: a collection is source
+ * material to read and pick from, a repertoire is what I've decided to play.
+ */
+export interface Collection {
+  id: string;
+  name: string;
+  source: 'file' | 'paste' | 'chesscom';
+  addedAt: number;
+  games: StoredGame[];
+}
+
 export interface AppState {
   version: 1;
   slots: Slot[];
   repertoires: Repertoire[];
+  collections: Collection[];
   /**
    * Scheduling state, keyed `${repertoireId}:${fen}`. Kept outside the tree so
    * editing a repertoire never disturbs review history, and so a position with

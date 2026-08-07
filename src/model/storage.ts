@@ -68,7 +68,22 @@ export function parseState(raw: unknown): AppState {
   const chesscomUsername =
     typeof obj.chesscomUsername === 'string' ? obj.chesscomUsername : undefined;
 
-  return { version: 1, slots, repertoires, cards, streak, chesscomUsername };
+  // Collections arrived after cards; older exports load without them.
+  const collections = Array.isArray(obj.collections)
+    ? (obj.collections as AppState['collections']).filter(
+        (c) => c && typeof c.id === 'string' && Array.isArray(c.games),
+      )
+    : [];
+
+  return {
+    version: 1,
+    slots,
+    repertoires,
+    collections,
+    cards,
+    streak,
+    chesscomUsername,
+  };
 }
 
 function parseRepertoire(raw: unknown, index: number): Repertoire {

@@ -4,16 +4,22 @@ import type { DrillLine } from './model/lines';
 import { bumpStreak } from './model/srs';
 import type { PathStep } from './model/tree';
 import { useAppState } from './useAppState';
+import { CollectionView } from './ui/CollectionView';
+import { Collections } from './ui/Collections';
 import { applyGrade, Drill } from './ui/Drill';
 import { Editor } from './ui/Editor';
 import { Games } from './ui/Games';
+import { GameView } from './ui/GameView';
 import { RepertoireList } from './ui/RepertoireList';
 import './App.css';
 
 type View =
   | { name: 'list' }
   | { name: 'editor'; repertoireId: string; path?: PathStep[] }
-  | { name: 'games' }
+  | { name: 'collections' }
+  | { name: 'collection'; collectionId: string }
+  | { name: 'game'; collectionId: string; gameId: string }
+  | { name: 'review'; collectionId: string }
   | { name: 'drill'; lines: DrillLine[] };
 
 /**
@@ -74,19 +80,82 @@ export default function App() {
     );
   }
 
-  if (view.name === 'games') {
+  if (view.name === 'review') {
+    const collection = state.collections.find(
+      (c) => c.id === view.collectionId,
+    );
+    if (collection) {
+      return (
+        <main className="app">
+          <Games
+            state={state}
+            setState={setState}
+            collection={collection}
+            onFix={(repertoireId, path) =>
+              setView({ name: 'editor', repertoireId, path })
+            }
+            onBack={() =>
+              setView({ name: 'collection', collectionId: collection.id })
+            }
+          />
+        </main>
+      );
+    }
+  }
+
+  if (view.name === 'collections') {
     return (
       <main className="app">
-        <Games
+        <Collections
           state={state}
           setState={setState}
-          onFix={(repertoireId, path) =>
-            setView({ name: 'editor', repertoireId, path })
-          }
+          onOpen={(collectionId) => setView({ name: 'collection', collectionId })}
           onBack={() => setView({ name: 'list' })}
         />
       </main>
     );
+  }
+
+  if (view.name === 'collection') {
+    const collection = state.collections.find(
+      (c) => c.id === view.collectionId,
+    );
+    if (collection) {
+      return (
+        <main className="app">
+          <CollectionView
+            state={state}
+            collection={collection}
+            onOpenGame={(gameId) =>
+              setView({ name: 'game', collectionId: collection.id, gameId })
+            }
+            onReview={(collectionId) => setView({ name: 'review', collectionId })}
+            onBack={() => setView({ name: 'collections' })}
+          />
+        </main>
+      );
+    }
+  }
+
+  if (view.name === 'game') {
+    const collection = state.collections.find(
+      (c) => c.id === view.collectionId,
+    );
+    const game = collection?.games.find((g) => g.id === view.gameId);
+    if (collection && game) {
+      return (
+        <main className="app">
+          <GameView
+            state={state}
+            game={game}
+            onAdopt={updateRepertoire}
+            onBack={() =>
+              setView({ name: 'collection', collectionId: collection.id })
+            }
+          />
+        </main>
+      );
+    }
   }
 
   if (view.name === 'editor') {
@@ -113,7 +182,7 @@ export default function App() {
         setState={setState}
         onOpen={(repertoireId) => setView({ name: 'editor', repertoireId })}
         onStartSession={startSession}
-        onReviewGames={() => setView({ name: 'games' })}
+        onReviewGames={() => setView({ name: 'collections' })}
       />
     </main>
   );

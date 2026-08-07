@@ -117,7 +117,7 @@ export function RepertoireList({
           <span className="muted small"> due today</span>
         </div>
         <div className="row">
-          <button onClick={onReviewGames}>Review games</button>
+          <button onClick={onReviewGames}>Games</button>
           <button className="primary" onClick={onStartSession} disabled={!due}>
             {due ? 'Start drilling' : 'Nothing due'}
           </button>

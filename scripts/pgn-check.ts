@@ -142,6 +142,17 @@ check(
   `"${getNode(mixed, ROOT_FEN).moves[0].note}"`,
 );
 
+// The mainline must sit first among a position's continuations: drill lines
+// and the game viewer both follow the first edge.
+let ordered = makeRepertoire('slot-vs-e4', 'Caro', 'b');
+ordered = importPgn(ordered, '1. e4 c6 (1... e5 2. Nf3) (1... d5) 2. d4', ROOT_FEN).rep;
+const afterE4Ordered = tryMove(ROOT_FEN, 'e4')!;
+check(
+  'mainline is the first continuation, not a variation',
+  getNode(ordered, afterE4Ordered).moves[0].san === 'c6',
+  getNode(ordered, afterE4Ordered).moves.map((m) => m.san).join(' '),
+);
+
 check('a chess.com download is recognised as games', looksLikeGames(CC_DOWNLOAD) === true);
 check(
   'a repertoire is not mistaken for games',

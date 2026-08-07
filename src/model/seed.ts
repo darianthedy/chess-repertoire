@@ -27,6 +27,7 @@ export function initialState(): AppState {
     version: 1,
     slots: DEFAULT_SLOTS,
     repertoires: [],
+    collections: [],
     cards: {},
     streak: null,
   };

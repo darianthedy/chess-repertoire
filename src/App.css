@@ -412,6 +412,28 @@ textarea {
   margin-left: auto;
 }
 
+/* ---------- collection game rows ---------- */
+
+.gamerow {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  text-align: left;
+  padding: 0.6rem 0.75rem;
+  border-radius: 10px;
+}
+.gamerow__players {
+  font-weight: 600;
+  font-size: 0.88rem;
+}
+.gamerow__opening {
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
 /* ---------- drill ---------- */
 
 .drill {

@@ -199,13 +199,6 @@ export function mergeMoves(
   let current = fen;
 
   for (const move of moves) {
-    // Variations branch from the position *before* this move, so they are
-    // merged first, while `current` still points there.
-    for (const variation of move.variations) {
-      const result = mergeMoves(rep, current, variation, stats);
-      rep = result.rep;
-    }
-
     const next = tryMove(current, move.san);
     if (!next) {
       stats.rejected++;
@@ -225,6 +218,16 @@ export function mergeMoves(
     } else {
       rep = addMove(rep, current, move.san, move.comment ?? '');
       stats.added++;
+    }
+
+    // Variations branch from the position *before* this move, so they're merged
+    // while `current` still points there — but only after the move itself, so
+    // the mainline stays first among the continuations. Order matters: drill
+    // lines and the game viewer's "next" both follow the first edge, and a
+    // sideline sitting at index 0 would be treated as the main line.
+    for (const variation of move.variations) {
+      const result = mergeMoves(rep, current, variation, stats);
+      rep = result.rep;
     }
 
     current = next;
