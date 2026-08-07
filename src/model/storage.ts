@@ -59,6 +59,15 @@ export function parseState(raw: unknown): AppState {
       ? (obj.cards as AppState['cards'])
       : {};
 
+  // Drill recency arrived with open-ended drilling; older exports load as
+  // "never drilled", which simply means everything is equally overdue.
+  const lastDrilled: Record<string, number> = {};
+  if (typeof obj.lastDrilled === 'object' && obj.lastDrilled !== null) {
+    for (const [id, at] of Object.entries(obj.lastDrilled)) {
+      if (typeof at === 'number') lastDrilled[id] = at;
+    }
+  }
+
   const s = obj.streak as Record<string, unknown> | undefined;
   const streak =
     s && typeof s.count === 'number' && typeof s.lastDate === 'string'
@@ -82,6 +91,7 @@ export function parseState(raw: unknown): AppState {
     collections,
     cards,
     streak,
+    lastDrilled,
     chesscomUsername,
   };
 }

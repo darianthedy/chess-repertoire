@@ -2,12 +2,6 @@ import type { CardState } from './types';
 
 export const DAY = 86_400_000;
 
-/** Cards reviewed per session, sized to the ~15 minute budget the design targets. */
-export const DAILY_CAP = 50;
-
-/** Ceiling on unseen positions per session, so a new repertoire can't crowd out reviews. */
-export const NEW_CARD_CAP = 15;
-
 /**
  * Binary grading, not SM-2's 0–5 self-rating: self-rating is slow and easy to
  * cheat. Correct maps to 4 (which leaves ease untouched under the standard
