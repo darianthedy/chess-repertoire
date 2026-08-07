@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ROOT_FEN } from '../model/fen';
-import { lineThrough, pickLine, RECENT_MEMORY } from '../model/lines';
+import { isAmbiguous, lineThrough, pickLine, RECENT_MEMORY } from '../model/lines';
 import type { DrillLine } from '../model/lines';
 import { cardKey, CORRECT, newCard, schedule, WRONG } from '../model/srs';
 import { getNode, isMyTurn } from '../model/tree';
@@ -86,6 +86,12 @@ export function Drill({ state, first, onGrade, onDrilled, onDone }: Props) {
 
   /** Graded positions are mine, in-window, and carrying a card in this line. */
   const isGraded = line.cardFens.includes(fen);
+  /**
+   * A position where I stored several moves of my own. The app plays one for me
+   * rather than asking, but says so — silently making a choice on my behalf is
+   * how a branch quietly stops being practised without me noticing.
+   */
+  const choosing = rep && myMove && !isGraded && isAmbiguous(rep, fen);
 
   const advance = useCallback(() => {
     setFeedback({ kind: 'none' });
@@ -156,33 +162,55 @@ export function Drill({ state, first, onGrade, onDrilled, onDone }: Props) {
   );
 
   /**
-   * A move that isn't this line's move may still be correct: with alternatives
-   * in one slot, the move I choose is what selects the repertoire. Look for
-   * another live repertoire in the same slot that plays it here, and if found,
-   * continue the puzzle in that repertoire's tree.
+   * Swap the puzzle onto a different move of mine at this position, keeping the
+   * prefix already walked and following the new branch to its end.
+   */
+  const reroute = useCallback(
+    (target: Repertoire, san: string): DrillLine | null => {
+      const edge = getNode(target, fen).moves.find(
+        (m) => m.san === san && m.isMine,
+      );
+      if (!edge) return null;
+      const rest = lineThrough(target, edge.to);
+      if (!rest) return null;
+      return {
+        repertoireId: target.id,
+        steps: [...line.steps.slice(0, ply), { san, fen: edge.to }, ...rest.steps.slice(
+          rest.steps.findIndex((s) => s.fen === edge.to) + 1,
+        )],
+        cardFens: rest.cardFens,
+      };
+    },
+    [fen, line.steps, ply],
+  );
+
+  /**
+   * A move that isn't this line's move may still be correct, two ways.
+   *
+   * Within this repertoire: I stored several moves of my own here and played
+   * the one the line didn't take. Ambiguous positions are normally auto-played
+   * rather than asked (see `choosing`), so this is the safety net for the case
+   * where one is still graded — a stored move of mine must never be marked
+   * wrong just for losing a coin toss about which branch the walk took.
+   *
+   * Across repertoires: with alternatives in one slot, the move I choose is
+   * what selects the repertoire, so a move another live repertoire in the same
+   * slot plays here continues the puzzle in that repertoire's tree.
    */
   const divergence = useCallback(
     (san: string): DrillLine | null => {
+      const own = reroute(rep, san);
+      if (own) return own;
+
       for (const other of state.repertoires) {
         if (other.id === rep.id || other.state === 'parked') continue;
         if (other.slotId !== rep.slotId || other.side !== rep.side) continue;
-        const edge = getNode(other, fen).moves.find(
-          (m) => m.san === san && m.isMine,
-        );
-        if (!edge) continue;
-        const rest = lineThrough(other, edge.to);
-        if (!rest) continue;
-        return {
-          repertoireId: other.id,
-          steps: [...line.steps.slice(0, ply), { san, fen: edge.to }, ...rest.steps.slice(
-            rest.steps.findIndex((s) => s.fen === edge.to) + 1,
-          )],
-          cardFens: rest.cardFens,
-        };
+        const swapped = reroute(other, san);
+        if (swapped) return swapped;
       }
       return null;
     },
-    [fen, line.steps, ply, rep, state.repertoires],
+    [rep, reroute, state.repertoires],
   );
 
   const onMove = useCallback(
@@ -330,7 +358,11 @@ export function Drill({ state, first, onGrade, onDrilled, onDone }: Props) {
         )}
         {feedback.kind === 'none' && !atEnd && (
           <span className="muted">
-            {myMove && isGraded ? 'Your move' : '…'}
+            {myMove && isGraded
+              ? 'Your move'
+              : choosing
+                ? `Your choice here — playing ${expected.san}`
+                : '…'}
           </span>
         )}
         {atEnd && (

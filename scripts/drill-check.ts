@@ -4,6 +4,7 @@ import {
   depthMap,
   drillableFens,
   dueCount,
+  isAmbiguous,
   lineThrough,
   pickLine,
   touchRepertoire,
@@ -220,6 +221,49 @@ const scheduled: AppState = {
 };
 check('future-dated cards are not due', dueCount(scheduled, NOW) === 2, `${dueCount(scheduled, NOW)}`);
 check('and are due again once time passes', dueCount(scheduled, NOW + 11 * DAY) === 5);
+
+// -------------------------------------------------- ambiguous positions -----
+// `branchy` holds two moves of my own after 1.d4 d5 — either 2.Nf3 or 2.c4.
+// Both are mine, so there is no single right answer to ask for: the drill plays
+// one and grades neither, but still walks the line through it.
+check('a position with two of my moves is ambiguous', isAmbiguous(branchy, afterD5));
+check('a position with one of my moves is not', !isAmbiguous(branchy, ROOT_FEN));
+check('a position where I am not to move is not', !isAmbiguous(branchy, afterC4));
+
+const branchDrillable = drillableFens(branchy);
+check(
+  'ambiguous positions do not generate cards',
+  !branchDrillable.includes(afterD5),
+  `${branchDrillable.length} drillable`,
+);
+check('the unambiguous ones still do', branchDrillable.length === 3, `${branchDrillable.length}`);
+
+// Auto-played, not skipped: the line still passes through the position, and
+// every position after it is graded as usual.
+const ambLine = lineThrough(branchy, ROOT_FEN)!;
+check(
+  'the line still walks through the ambiguous position',
+  ambLine.steps.map((s) => s.san).join(' ') === 'd4 d5 Nf3 Nf6 Bf4',
+  ambLine.steps.map((s) => s.san).join(' '),
+);
+check('but does not card it', !ambLine.cardFens.includes(afterD5));
+check('while still carding the rest of the line', ambLine.cardFens.length === 2, `${ambLine.cardFens.length}`);
+
+// The branch the walk did not take is not orphaned: its own deeper cards pull
+// a line through it.
+const otherBranch = lineThrough(branchy, afterE6)!;
+check(
+  'the other branch is still reachable',
+  otherBranch.steps.map((s) => s.san).slice(0, 4).join(' ') === 'd4 d5 c4 e6',
+  otherBranch.steps.map((s) => s.san).join(' '),
+);
+
+check(
+  'ambiguous positions are not counted as due',
+  dueCount(branchState, NOW) === 3,
+  `${dueCount(branchState, NOW)}`,
+);
+check('the repertoire still drills its unambiguous positions', canDrill(branchState));
 
 console.log(failures === 0 ? '\nAll drill checks passed.' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);
