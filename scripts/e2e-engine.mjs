@@ -174,42 +174,41 @@ const move = async (from, to) => {
 };
 
 let sawBoard = false;
-let playedWrong = false;
+let reachedEnd = false;
 let evalBarDuringDrill = 0;
 let enginePanelDuringDrill = 0;
 
+// The drill is open-ended — there is no "Finish", so this walks one puzzle,
+// deliberately missing it, and then stops the session by hand.
 for (let i = 0; i < 40; i++) {
-  if (await p.locator('.drill--done').count()) break;
-
   // Sampled on every turn of the loop, not just once: the bar must be absent
   // for the whole session, including while feedback is on screen.
   evalBarDuringDrill += await p.locator('.evalbar').count();
   enginePanelDuringDrill += await p.locator('.engine__lines').count();
 
+  const status = await p.locator('.drill__status').innerText().catch(() => '');
+  if (status.includes('End of line')) {
+    reachedEnd = true;
+    break;
+  }
+
   if (await p.getByRole('button', { name: 'Continue' }).count()) {
     await p.getByRole('button', { name: 'Continue' }).click();
-  } else if (await p.getByRole('button', { name: /Next puzzle|Finish/ }).count()) {
-    await p.getByRole('button', { name: /Next puzzle|Finish/ }).click();
-  } else if ((await p.locator('.drill__status .muted').innerText().catch(() => '')) === 'Your move') {
+  } else if (status.includes('Your move')) {
     sawBoard = true;
-    // Miss it deliberately the first time, then play the book move so the
-    // session can finish.
-    if (!playedWrong) {
-      playedWrong = true;
-      await move('e7', 'e5');
-    } else {
-      await move('c7', 'c6');
-    }
+    await move('e7', 'e5'); // not the book move
   }
   await p.waitForTimeout(250);
 }
 
 check('the drill actually asked for a move', sawBoard);
+check('the missed line played out to its end', reachedEnd);
 check('no eval bar at any point during the drill', evalBarDuringDrill === 0, `${evalBarDuringDrill} sightings`);
 check('no engine panel at any point during the drill', enginePanelDuringDrill === 0);
 
 // --- but the review is there once it is over ----------------------------------
 
+await p.getByRole('button', { name: '← End session' }).click();
 await p.waitForSelector('.drill--done', { timeout: 20000 });
 check('the session ends with a review of what was missed',
   (await p.locator('.review').count()) === 1);

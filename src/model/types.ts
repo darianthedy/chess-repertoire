@@ -125,6 +125,12 @@ export interface AppState {
   cards: Record<string, CardState>;
   /** Consecutive days with a completed session. */
   streak: { count: number; lastDate: string } | null;
+  /**
+   * When each repertoire was last drilled, keyed by id. Drives the
+   * least-recently-drilled weighting in the puzzle picker; absent means never,
+   * which is the strongest claim on the next puzzle.
+   */
+  lastDrilled: Record<string, number>;
   /** Chess.com handle, remembered so game review is one click. */
   chesscomUsername?: string;
   /** Absent on stores predating engine support; treated as the default. */

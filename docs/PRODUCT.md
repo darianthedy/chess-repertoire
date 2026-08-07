@@ -110,13 +110,33 @@ generate an unanswerable card. Scoping the key to the repertoire keeps
 transpositions collapsing *within* a tree (the useful behaviour) while isolating
 alternatives *across* trees (the correct behaviour).
 
-**Design decision — a global daily cap, not a per-repertoire one.** The queue is
-one shared pool across all card-generating repertoires, capped at a target
-session length (default ~15 min ≈ 40–60 cards), drawn most-overdue-first. Adding
-a repertoire does *not* silently multiply my daily workload — it dilutes
-attention across a fixed budget. The app surfaces the review-debt trend so that
-cost is visible immediately rather than discovered three weeks later as a
-200-card backlog.
+**Design decision — no session queue and no daily cap; draw puzzles endlessly.**
+An earlier design assembled a capped queue of due cards up front and ended the
+session when it emptied. In practice that made the app refuse work: on a day
+with nothing due there was nothing to do, and on a good day the drill stopped
+before I wanted it to. Drilling is now open-ended — a session starts whenever,
+puzzles are drawn one at a time, and it ends when I stop it.
+
+Randomness carries the load the cap used to. Each draw is two-stage:
+
+1. **Pick the repertoire**, weighted by how long it has been since it last came
+   up — least-recently-drilled highest, saturating after a week and never
+   reaching zero. `trial` repertoires draw at half weight. Picking the
+   repertoire *before* the position is what makes this weighting mean anything;
+   one flat pool would hand every session to whichever tree has the most
+   positions. Recency is recorded as puzzles are drilled, so a session rotates
+   across openings by itself.
+2. **Pick the position within it**, weighted by SM-2 state: unseen and overdue
+   positions dominate, and a well-known one keeps a small but non-zero share.
+   Due dates still steer what comes up — they just no longer gate whether
+   anything comes up at all.
+
+Recently drawn positions are held out of the next few draws, so a short session
+on a small repertoire doesn't loop over the same handful of puzzles.
+
+Adding a repertoire therefore still doesn't multiply the workload — the workload
+is however long I choose to sit there. It dilutes *attention within a session*,
+which is the same dilution the cap provided, without the refusal to work.
 
 **Rules encoded in the UI (warn, don't block):**
 - At most one repertoire in `trial` at a time.
@@ -219,7 +239,9 @@ The core loop. **The unit of practice is a whole line, not a single position.**
 - The line ends when the tree ends. Show the **terminal plan note** — "castle
   short, play …c5, pressure the d-file" — which is the actual payload of the
   whole exercise.
-- Session ends when the due queue is empty. Target: **10–15 min**.
+- The session doesn't end on its own — the next puzzle is always drawn. Ending
+  is a decision, not a queue running out. Target: **10–15 min**, honoured by
+  stopping, not by being stopped.
 
 **Design decision — present as lines, schedule as positions.**
 Naively, one line = one card. That's coarse: a 12-move line gets a single grade,
@@ -227,8 +249,8 @@ so a move I know cold is re-drilled at the same rate as the one move I keep
 missing, and SM-2 loses all its resolution.
 
 Instead: SM-2 state lives on **positions** (the F3 card model), but positions are
-never presented alone. The scheduler picks the most-overdue position, then walks
-the *whole line containing it* from the start. Every position along the way is
+never presented alone. The picker draws a position, then walks the *whole line
+containing it* from the start. Every position along the way is
 graded in passing. Known moves cost two seconds and get their intervals pushed
 out; the weak position in the middle gets a real grade. I get sequence practice;
 the algorithm gets per-move resolution.
@@ -498,9 +520,9 @@ exceed this considerably; these numbers describe daily workload only.
 
 Total active: **~370–490 cards**, settling to roughly 12–18 reviews/day once
 mature — a ~12–15 minute daily session, which is the budget the whole design is
-built around. Raising active depth later increases this; the global daily cap
-absorbs the spike by spreading it over more days rather than lengthening
-sessions.
+built around. That budget is now kept by choosing to stop rather than by a cap:
+raising active depth adds positions to the pool the picker draws from, which
+changes what comes up, not how long I sit there.
 
 **Only one slot has alternatives, and it's the cheap kind.** London and 1.e4
 diverge at move 1 — no shared positions, no contradictory cards, and the choice

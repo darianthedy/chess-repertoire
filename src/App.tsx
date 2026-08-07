@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { buildSession } from './model/lines';
+import { pickLine, touchRepertoire } from './model/lines';
 import type { DrillLine } from './model/lines';
 import { bumpStreak } from './model/srs';
 import type { PathStep } from './model/tree';
@@ -21,7 +21,7 @@ type View =
   | { name: 'collection'; collectionId: string }
   | { name: 'game'; collectionId: string; gameId: string }
   | { name: 'review'; collectionId: string }
-  | { name: 'drill'; lines: DrillLine[] };
+  | { name: 'drill'; first: DrillLine };
 
 /**
  * Four screens, no router. Deep links aren't wanted (a puzzle shouldn't be
@@ -54,10 +54,19 @@ export default function App() {
     [setState],
   );
 
+  const onDrilled = useCallback(
+    (repertoireId: string) => {
+      setState((s) => (s ? touchRepertoire(s, repertoireId, Date.now()) : s));
+    },
+    [setState],
+  );
+
+  // Drilling is open-ended: one puzzle is drawn to open on and the rest are
+  // drawn as they're reached, so a session has no length to decide up front.
   const startSession = useCallback(() => {
     if (!state) return;
-    const lines = buildSession(state, Date.now());
-    if (lines.length) setView({ name: 'drill', lines });
+    const first = pickLine(state, Date.now());
+    if (first) setView({ name: 'drill', first });
   }, [state]);
 
   const endSession = useCallback(() => {
@@ -80,8 +89,9 @@ export default function App() {
       <main className="app">
         <Drill
           state={state}
-          lines={view.lines}
+          first={view.first}
           onGrade={onGrade}
+          onDrilled={onDrilled}
           onDone={endSession}
         />
       </main>
