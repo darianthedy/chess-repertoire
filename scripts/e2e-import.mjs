@@ -57,22 +57,22 @@ check('positions landed in the tree', /\d+ positions/.test(title) && !/ 0 positi
 
 // --- both chapters merged into one tree ------------------------------------
 await page.getByRole('button', { name: 'Close' }).click();
-const rootMoves = await page.locator('.moves__san').allTextContents();
+const rootMoves = await page.locator('.line__next').allTextContents();
 check('single root move after merging two chapters', rootMoves.join(' ') === 'd4', `[${rootMoves.join(' ')}]`);
 
-const rootNote = await page.locator('.moves__note').first().textContent();
+const rootNote = await page.locator('.notes__ahead .moves__note').first().textContent();
 check('PGN comment became a note', rootNote.trim() === 'queen pawn', `"${rootNote.trim()}"`);
 
 // Walk into 1.d4 — both chapters' replies should be present.
-await page.locator('.moves__san', { hasText: 'd4' }).first().click();
-const replies = (await page.locator('.moves__san').allTextContents()).sort();
+await page.locator('.line__next', { hasText: 'd4' }).first().click();
+const replies = (await page.locator('.line__next').allTextContents()).sort();
 check('both chapters contributed replies to 1.d4', replies.join(' ') === 'Nf6 d5', `[${replies.join(' ')}]`);
 
 // --- variation preserved ---------------------------------------------------
-await page.locator('.moves__san', { hasText: 'd5' }).first().click();
-await page.locator('.moves__san', { hasText: 'Nf3' }).first().click();
-await page.locator('.moves__san', { hasText: 'Nf6' }).first().click();
-const third = (await page.locator('.moves__san').allTextContents()).sort();
+await page.locator('.line__next', { hasText: 'd5' }).first().click();
+await page.locator('.line__next', { hasText: 'Nf3' }).first().click();
+await page.locator('.line__next', { hasText: 'Nf6' }).first().click();
+const third = (await page.locator('.line__next').allTextContents()).sort();
 check('variation kept alongside the mainline', third.join(' ') === 'Bf4 c4', `[${third.join(' ')}]`);
 
 // --- idempotence through the UI --------------------------------------------
@@ -115,7 +115,7 @@ const guard = await page.locator('.import p.error').textContent();
 check('game exports are refused, not silently imported', guard.includes('played games'), `"${guard.slice(0, 80)}…"`);
 check('refusal points at the right screen', guard.includes('Review games'));
 
-const rootAfterGuard = await page.locator('.moves__san').allTextContents();
+const rootAfterGuard = await page.locator('.line__next').allTextContents();
 check('refused import left the tree untouched', rootAfterGuard.join(' ') === 'd4', `[${rootAfterGuard.join(' ')}]`);
 
 // --- imported lines are immediately drillable ------------------------------

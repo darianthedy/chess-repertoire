@@ -23,6 +23,7 @@ import {
 } from '../model/tree';
 import type { PathStep } from '../model/tree';
 import type { Repertoire } from '../model/types';
+import { LinePanel } from './LinePanel';
 import { MoveBoard } from './MoveBoard';
 
 interface Props {
@@ -43,8 +44,6 @@ export function Editor({
   initialPath,
 }: Props) {
   const [path, setPath] = useState<PathStep[]>(initialPath ?? []);
-  const [draftNote, setDraftNote] = useState('');
-  const [editingSan, setEditingSan] = useState<string | null>(null);
   // The move being swapped out, if any. The replacement is played on the board
   // rather than typed, so illegal choices can't be expressed in the first place.
   const [replacing, setReplacing] = useState<string | null>(null);
@@ -65,18 +64,27 @@ export function Editor({
 
   const navigateTo = useCallback((steps: PathStep[]) => {
     setPath(steps);
-    setDraftNote('');
-    setEditingSan(null);
     setReplacing(null);
   }, []);
+
+  /**
+   * The move that produced this position, looked up from the position before
+   * it. Annotating is done standing on a move rather than pointing at it from
+   * the parent: it's the position you're judging, and it's already on screen.
+   */
+  const parentFen = path.length > 1 ? path[path.length - 2].fen : ROOT_FEN;
+  const currentSan = path.length ? path[path.length - 1].san : null;
+  const currentEdge = currentSan
+    ? getNode(rep, parentFen).moves.find((m) => m.san === currentSan)
+    : undefined;
 
   /**
    * Playing a move adds it and walks into it, with no confirmation step.
    *
    * Notes are optional, so a form gating every move would be friction with
    * nothing behind it — and entering a repertoire means doing this hundreds of
-   * times. Annotate afterwards from the continuations list; remove a mistake
-   * with the ✕ there.
+   * times. Annotate afterwards in the Notes panel, which is already pointed at
+   * the move you just played; remove a mistake with the ✕ in the line.
    */
   const handleMove = useCallback(
     (san: string): boolean => {
@@ -117,7 +125,11 @@ export function Editor({
     [fen, navigateTo, node.moves, onChange, path, rep, replacing],
   );
 
-  const pairs = useMemo(() => groupIntoPairs(path), [path]);
+  /** Notes on the moves available from here, readable before walking into one. */
+  const nextNotes = useMemo(
+    () => node.moves.filter((m) => m.note),
+    [node.moves],
+  );
 
   const report = useCallback((r: ImportResult) => {
     onChange(() => r.rep);
@@ -287,7 +299,7 @@ export function Editor({
         </p>
       )}
 
-      <div className="editor__layout">
+      <div className="editor__layout editor__layout--stacked">
         <div className="editor__board">
           <MoveBoard
             fen={fen}
@@ -312,162 +324,56 @@ export function Editor({
           </div>
         </div>
 
+        {/* Everything below the board in reading order: what this move is
+            for, what the line as a whole is for, and the line itself as the
+            thing you steer with. */}
         <aside className="editor__panel">
           <section className="card">
-            <h2>Line</h2>
-            {path.length === 0 ? (
-              <p className="muted small">
-                Starting position. Play a move on the board to begin the tree.
-              </p>
-            ) : (
-              <div className="line">
-                {pairs.map((pair, i) => (
-                  <span key={i} className="line__pair">
-                    <span className="muted">{i + 1}.</span>
-                    {pair.map((step) => (
-                      <button
-                        key={step.index}
-                        className={
-                          'line__san' +
-                          (step.index === path.length - 1
-                            ? ' line__san--current'
-                            : '')
-                        }
-                        onClick={() =>
-                          navigateTo(path.slice(0, step.index + 1))
-                        }
-                      >
-                        {step.san}
-                      </button>
-                    ))}
-                  </span>
-                ))}
-              </div>
-            )}
-          </section>
-
-          <section className="card">
-              <h2>
-                Continuations
-                <span className="muted">
-                  {' '}
-                  · {myTurn ? 'my move' : "opponent's move"}
-                </span>
-              </h2>
-              {node.moves.length === 0 ? (
+            <h2>Notes</h2>
+            {currentSan && currentEdge ? (
+              <>
                 <p className="muted small">
-                  Nothing yet. Play a move on the board to add one.
+                  On <strong>{currentSan}</strong> — the move you're standing on.
                 </p>
-              ) : (
-                <ul className="moves">
-                  {node.moves.map((m, i) => (
-                    <li key={m.san} className="moves__item">
-                      <div className="moves__head">
-                        <button
-                          className="moves__san"
-                          onClick={() =>
-                            navigateTo([...path, { san: m.san, fen: m.to }])
-                          }
-                        >
-                          {m.san}
-                        </button>
-                        {/* Outside the SAN button on purpose: the badge is a
-                            property of the row, not part of the move's name. */}
-                        {i === 0 && node.moves.length > 1 && (
-                          <span className="tag">main</span>
-                        )}
-                        {i > 0 && (
-                          <button
-                            className="icon"
-                            title="Make this the main line"
-                            onClick={() =>
-                              onChange((r) => promoteMove(r, fen, m.san))
-                            }
-                          >
-                            ↑
-                          </button>
-                        )}
-                        <button
-                          className="icon"
-                          title="Replace this move with a different one"
-                          onClick={() =>
-                            setReplacing(replacing === m.san ? null : m.san)
-                          }
-                        >
-                          ⇄
-                        </button>
-                        <button
-                          className="icon"
-                          title="Edit note"
-                          onClick={() => {
-                            setEditingSan(
-                              editingSan === m.san ? null : m.san,
-                            );
-                            setDraftNote(m.note);
-                          }}
-                        >
-                          ✎
-                        </button>
-                        <button
-                          className="icon icon--danger"
-                          title="Delete this move and everything after it"
-                          onClick={() => {
-                            const lost = positionsLostByRemoving(
-                              rep,
-                              fen,
-                              m.san,
-                            );
-                            if (
-                              confirm(
-                                `Delete ${m.san}? ${lost} position${
-                                  lost === 1 ? '' : 's'
-                                } are reachable no other way and will go with it.`,
-                              )
-                            ) {
-                              onChange((r) => deleteMove(r, fen, m.san));
-                            }
-                          }}
-                        >
-                          ✕
-                        </button>
-                      </div>
-                      {editingSan === m.san ? (
-                        <div className="moves__edit">
-                          <textarea
-                            rows={2}
-                            autoFocus
-                            value={draftNote}
-                            placeholder={
-                              m.isMine
-                                ? 'Why this move? e.g. stops Bg4, keeps e5 available'
-                                : 'e.g. the critical test'
-                            }
-                            onChange={(e) => setDraftNote(e.target.value)}
-                          />
-                          <div className="row">
-                            <button
-                              className="primary"
-                              onClick={() => {
-                                onChange((r) =>
-                                  updateNote(r, fen, m.san, draftNote.trim()),
-                                );
-                                setEditingSan(null);
-                              }}
-                            >
-                              Save
-                            </button>
-                            <button onClick={() => setEditingSan(null)}>
-                              Cancel
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        m.note && <p className="moves__note">{m.note}</p>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
+                <textarea
+                  rows={3}
+                  className="notes__edit"
+                  value={currentEdge.note}
+                  placeholder={
+                    currentEdge.isMine
+                      ? 'Why this move? e.g. stops Bg4, keeps e5 available'
+                      : 'e.g. the critical test'
+                  }
+                  onChange={(e) =>
+                    onChange((r) =>
+                      updateNote(r, parentFen, currentSan, e.target.value),
+                    )
+                  }
+                />
+              </>
+            ) : (
+              <p className="muted small">
+                Starting position — play a move on the board, then annotate it
+                here.
+              </p>
+            )}
+            {nextNotes.length > 0 && (
+              <ul className="notes__ahead">
+                {nextNotes.map((m) => (
+                  <li key={m.san}>
+                    <button
+                      className="moves__san"
+                      onClick={() =>
+                        navigateTo([...path, { san: m.san, fen: m.to }])
+                      }
+                    >
+                      {m.san}
+                    </button>
+                    <span className="moves__note">{m.note}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
 
           {node.moves.length === 0 && path.length > 0 && (
@@ -491,30 +397,83 @@ export function Editor({
               </p>
               <textarea
                 rows={3}
+                className="editor__plan"
                 placeholder="e.g. castle short, play ...c5, pressure the d-file"
                 value={node.plan ?? ''}
-                onChange={(e) =>
-                  onChange((r) => setPlan(r, fen, e.target.value))
-                }
+                onChange={(e) => onChange((r) => setPlan(r, fen, e.target.value))}
               />
             </section>
           )}
+
+          <LinePanel
+            path={path}
+            onGoTo={(i) => navigateTo(path.slice(0, i + 1))}
+            hint={myTurn ? 'my move' : "opponent's move"}
+            stackCont
+          >
+            {node.moves.length === 0 ? (
+              <span className="muted small">
+                Play a move on the board to add one.
+              </span>
+            ) : (
+              node.moves.map((m, i) => (
+                <span key={m.san} className="line__choice">
+                  <button
+                    className="line__next"
+                    onClick={() =>
+                      navigateTo([...path, { san: m.san, fen: m.to }])
+                    }
+                    title={m.note || `Go to ${m.san}`}
+                  >
+                    {m.san}
+                  </button>
+                  {/* Outside the SAN button on purpose: the badge is a
+                      property of the row, not part of the move's name. */}
+                  {i === 0 && node.moves.length > 1 && (
+                    <span className="tag">main</span>
+                  )}
+                  {i > 0 && (
+                    <button
+                      className="icon"
+                      title="Make this the main line"
+                      onClick={() => onChange((r) => promoteMove(r, fen, m.san))}
+                    >
+                      ↑
+                    </button>
+                  )}
+                  <button
+                    className="icon"
+                    title="Replace this move with a different one"
+                    onClick={() =>
+                      setReplacing(replacing === m.san ? null : m.san)
+                    }
+                  >
+                    ⇄
+                  </button>
+                  <button
+                    className="icon icon--danger"
+                    title="Delete this move and everything after it"
+                    onClick={() => {
+                      const lost = positionsLostByRemoving(rep, fen, m.san);
+                      if (
+                        confirm(
+                          `Delete ${m.san}? ${lost} position${
+                            lost === 1 ? '' : 's'
+                          } are reachable no other way and will go with it.`,
+                        )
+                      ) {
+                        onChange((r) => deleteMove(r, fen, m.san));
+                      }
+                    }}
+                  >
+                    ✕
+                  </button>
+                </span>
+              ))
+            )}
+          </LinePanel>
         </aside>
       </div>
     </div>
   );
-}
-
-interface IndexedStep extends PathStep {
-  index: number;
-}
-
-/** Group a path into numbered full moves for display. */
-function groupIntoPairs(path: PathStep[]): IndexedStep[][] {
-  return path.reduce<IndexedStep[][]>((acc, step, index) => {
-    const entry = { ...step, index };
-    if (index % 2 === 0) acc.push([entry]);
-    else acc[acc.length - 1].push(entry);
-    return acc;
-  }, []);
 }

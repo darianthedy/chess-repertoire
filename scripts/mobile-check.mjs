@@ -6,7 +6,9 @@
  */
 import { chromium, devices } from 'playwright';
 
-const URL = process.argv[2] ?? 'http://localhost:5173/';
+// The dev server picks the next free port when 5173 is taken, so allow an
+// override rather than silently testing someone else's checkout.
+const URL = process.argv[2] ?? process.env.E2E_BASE ?? 'http://localhost:5173/';
 const VIEWPORTS = [
   { name: 'iPhone SE', width: 320, height: 568 },
   { name: 'iPhone 12', width: 390, height: 844 },
@@ -108,10 +110,9 @@ for (const vp of VIEWPORTS) {
   );
 
   // --- font sizes on controls (iOS focus-zoom threshold is 16px) ---
-  // Step back one move: the final position is a leaf, so it shows the plan box
-  // rather than a continuations list with note editors.
+  // Step back one move so both text boxes are on screen at once: the note
+  // editor for the move you're on, and the plan box a leaf position shows.
   await page.getByRole('button', { name: '← Back' }).click();
-  await page.locator('.moves__item button[title="Edit note"]').first().click();
   await page.waitForTimeout(150);
   const small = await smallControls(page);
   report(
