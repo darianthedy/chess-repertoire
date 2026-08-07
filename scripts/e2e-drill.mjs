@@ -122,50 +122,55 @@ await move('c1', 'f4');
 await page.waitForSelector('.drill__status:has-text("End of line")', { timeout: 8000 });
 check('line ends and reports end of line', true);
 
-// The line contained a miss, so it should come back today rather than only
-// tomorrow — the relearning step.
+// Drilling is open-ended: there is always another puzzle, never a "Finish".
 const endText = await page.locator('.drill__status').innerText();
 check(
-  'missed line is re-queued into this session',
-  endText.includes('Next puzzle'),
+  'the line ends by offering another puzzle',
+  endText.includes('Next puzzle') && !endText.includes('Finish'),
   `"${endText.replace(/\n/g, ' | ')}"`,
 );
 
 await page.getByRole('button', { name: 'Next puzzle' }).click();
 await page.waitForSelector('.drill__status', { timeout: 8000 });
 const progress = await page.locator('.drill__bar .small').textContent();
-check('queue grew to hold the retry', progress.trim() === '2 / 2', `showed "${progress.trim()}"`);
+check(
+  'the counter runs up rather than down',
+  /^Puzzle 2\b/.test(progress.trim()),
+  `showed "${progress.trim()}"`,
+);
 
-// Replay the retry correctly, this time including the move that was missed.
+// Replay the line correctly, this time including the move that was missed.
 await waitForStartPosition();
 await page.waitForSelector('.drill__status:has-text("Your move")', { timeout: 8000 });
 await move('d2', 'd4');
 await waitForPieceOn('d5'); // opponent has replied; my turn again
 await move('g1', 'f3');
 await page.waitForSelector('.drill__status[data-kind="right"]', { timeout: 5000 });
-check('the previously missed move is accepted on retry', true);
+check('the previously missed move is accepted on the next pass', true);
 
 await waitForPieceOn('f6'); // ...Nf6 played automatically
 await move('c1', 'f4');
 await page.waitForSelector('.drill__status:has-text("End of line")', { timeout: 8000 });
 const finalText = await page.locator('.drill__status').innerText();
 check(
-  'a clean retry does not re-queue again',
-  finalText.includes('Finish'),
+  'the session keeps going with everything answered',
+  finalText.includes('Next puzzle'),
   `"${finalText.replace(/\n/g, ' | ')}"`,
 );
 
-await page.getByRole('button', { name: 'Finish' }).click();
-await page.waitForSelector('.drill--done, .drill__status', { timeout: 8000 });
-
-// --- scheduling actually persisted ----------------------------------------
-if (await page.locator('.drill--done').count()) {
-  await page.getByRole('button', { name: 'Back to repertoires' }).click();
-} else {
-  await page.getByRole('button', { name: '← End session' }).click();
-}
+// Ending is the user's call, not the queue's.
+await page.getByRole('button', { name: '← End session' }).click();
+await page.waitForSelector('.drill--done', { timeout: 8000 });
+const doneText = await page.locator('.drill--done').innerText();
+check(
+  'ending shows the session summary',
+  doneText.includes('Session complete') && /\d+ puzzles?/.test(doneText),
+  `"${doneText.replace(/\n/g, ' | ')}"`,
+);
+await page.getByRole('button', { name: 'Back to repertoires' }).click();
 await page.waitForSelector('.home');
 
+// --- scheduling actually persisted ----------------------------------------
 const dueAfter = (await page.locator('.today__count').textContent()).trim();
 check('graded cards leave the due queue', Number(dueAfter) < 3, `now ${dueAfter} due`);
 

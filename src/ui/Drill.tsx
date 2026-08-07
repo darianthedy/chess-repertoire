@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ROOT_FEN } from '../model/fen';
-import { lineThrough } from '../model/lines';
+import { lineThrough, pickLine, RECENT_MEMORY } from '../model/lines';
 import type { DrillLine } from '../model/lines';
 import { cardKey, CORRECT, newCard, schedule, WRONG } from '../model/srs';
 import { getNode, isMyTurn } from '../model/tree';
@@ -11,6 +11,10 @@ import { MoveBoard } from './MoveBoard';
 const REPLY_MS = 450;
 /** How long a correct move's note stays up before moving on. */
 const ADVANCE_MS = 550;
+/** Puzzles to put between a miss and its retry, so the answer isn't just echoed. */
+const RETRY_GAP = 3;
+/** Ceiling on lines waiting to be retried, so a bad run can't build a backlog. */
+const MAX_RETRIES = 10;
 
 type Feedback =
   | { kind: 'none' }
@@ -19,33 +23,42 @@ type Feedback =
 
 interface Props {
   state: AppState;
-  lines: DrillLine[];
+  /** The puzzle to open on, drawn before the drill mounts. */
+  first: DrillLine;
   onGrade: (repertoireId: string, fen: string, correct: boolean) => void;
+  onDrilled: (repertoireId: string) => void;
   onDone: () => void;
 }
 
-export function Drill({ state, lines, onGrade, onDone }: Props) {
-  /**
-   * The session queue. A line containing a missed move is appended once at the
-   * end, so a lapse is retried today rather than only tomorrow — the standard
-   * relearning step. Retries are marked so they can't re-queue endlessly.
-   */
-  const [queue, setQueue] = useState<(DrillLine & { retry?: boolean })[]>(lines);
-  const [lineIdx, setLineIdx] = useState(0);
+/**
+ * The drill loop. Open-ended: puzzles are drawn one at a time and the session
+ * runs until it's stopped, rather than being a queue assembled up front.
+ */
+export function Drill({ state, first, onGrade, onDrilled, onDone }: Props) {
+  const [line, setLine] = useState<DrillLine>(first);
   const [ply, setPly] = useState(0);
   const [feedback, setFeedback] = useState<Feedback>({ kind: 'none' });
   const [finished, setFinished] = useState(false);
   const [tally, setTally] = useState({ right: 0, wrong: 0 });
+  /** Puzzles completed so far, for the counter and the retry spacing. */
+  const [solved, setSolved] = useState(0);
   /** Cards already graded in this line, so a retry can't double-count. */
   const graded = useRef<Set<string>>(new Set());
   /**
+   * Missed lines waiting to come round again, each held back a few puzzles —
+   * the relearning step, without a fixed session to append to.
+   */
+  const retries = useRef<{ line: DrillLine; readyAt: number }[]>([]);
+  /** Recently drawn card keys, kept out of the next draws. */
+  const recent = useRef<string[]>([]);
+  /**
    * Whether anything was missed in the line being walked. State rather than a
    * ref because the end-of-line button label depends on it — a ref wouldn't
-   * re-render, and the button would claim "Finish" with a retry still queued.
+   * re-render, and the button would claim nothing was queued for retry.
    */
   const [missed, setMissed] = useState(false);
-  /** The line currently being walked; may be swapped mid-line on a divergence. */
-  const [line, setLine] = useState<DrillLine>(lines[0]);
+  /** The repertoire whose recency has already been recorded for this line. */
+  const touched = useRef<string | null>(null);
 
   const rep = useMemo(
     () => state.repertoires.find((r) => r.id === line.repertoireId) as Repertoire,
@@ -65,6 +78,18 @@ export function Drill({ state, lines, onGrade, onDone }: Props) {
     setPly((p) => p + 1);
   }, []);
 
+  // Record that this repertoire has just come up, so the picker's
+  // least-recently-drilled weighting rotates away from it for a while.
+  useEffect(() => {
+    if (touched.current === line.repertoireId) return;
+    touched.current = line.repertoireId;
+    onDrilled(line.repertoireId);
+    recent.current = [
+      ...line.cardFens.map((f) => cardKey(line.repertoireId, f)),
+      ...recent.current,
+    ].slice(0, RECENT_MEMORY);
+  }, [line, onDrilled]);
+
   // Opponent replies, and my own moves that sit past the drill window, play
   // themselves. Deep theory is still seen in context — just not graded.
   useEffect(() => {
@@ -74,27 +99,32 @@ export function Drill({ state, lines, onGrade, onDone }: Props) {
     return () => clearTimeout(t);
   }, [advance, atEnd, finished, isGraded, myMove, ply]);
 
-  /** True when finishing this line will append a retry to the queue. */
-  const willRequeue = missed && !queue[lineIdx]?.retry;
-
   const nextLine = useCallback(() => {
-    const current = queue[lineIdx];
-    // Re-queue a missed line once, at the end of the session.
-    const pending = willRequeue ? [...queue, { ...current, retry: true }] : queue;
+    const count = solved + 1;
+    if (missed && retries.current.length < MAX_RETRIES) {
+      retries.current.push({ line, readyAt: count + RETRY_GAP });
+    }
+
+    // A retry that has waited long enough comes first; otherwise draw fresh.
+    const due = retries.current.findIndex((r) => r.readyAt <= count);
+    const next =
+      due >= 0
+        ? retries.current.splice(due, 1)[0].line
+        : pickLine(state, Date.now(), recent.current);
 
     graded.current = new Set();
     setMissed(false);
+    setSolved(count);
 
-    if (lineIdx + 1 >= pending.length) {
+    if (!next) {
       setFinished(true);
       return;
     }
-    setQueue(pending);
-    setLine(pending[lineIdx + 1]);
-    setLineIdx((i) => i + 1);
+    touched.current = null;
+    setLine(next);
     setPly(0);
     setFeedback({ kind: 'none' });
-  }, [lineIdx, queue, willRequeue]);
+  }, [line, missed, solved, state]);
 
   const grade = useCallback(
     (correct: boolean) => {
@@ -173,7 +203,6 @@ export function Drill({ state, lines, onGrade, onDone }: Props) {
   );
 
   const plan = atEnd ? getNode(rep, fen).plan : undefined;
-  const progress = `${lineIdx + 1} / ${queue.length}`;
 
   if (finished) {
     const total = tally.right + tally.wrong;
@@ -182,6 +211,9 @@ export function Drill({ state, lines, onGrade, onDone }: Props) {
         <h1>Session complete</h1>
         <p className="drill__score">
           {tally.right} / {total} correct
+        </p>
+        <p className="muted small">
+          {solved} {solved === 1 ? 'puzzle' : 'puzzles'}
         </p>
         <button className="primary" onClick={onDone}>
           Back to repertoires
@@ -193,12 +225,23 @@ export function Drill({ state, lines, onGrade, onDone }: Props) {
   return (
     <div className="drill">
       <header className="drill__bar">
-        <button className="link" onClick={onDone}>
+        <button
+          className="link"
+          onClick={() => {
+            // A line walked to its end counts, even if "Next puzzle" was never
+            // pressed — stopping there is finishing it, not abandoning it.
+            if (atEnd) setSolved((s) => s + 1);
+            setFinished(true);
+          }}
+        >
           ← End session
         </button>
         {/* No repertoire or opening name: working out what this is forms part
-            of the exercise, exactly as it does at a real board. */}
-        <span className="muted small">{progress}</span>
+            of the exercise, exactly as it does at a real board. The count runs
+            up rather than down — the session ends when I say so. */}
+        <span className="muted small">
+          Puzzle {solved + 1} · {tally.right}/{tally.right + tally.wrong}
+        </span>
       </header>
 
       <div className="drill__board">
@@ -244,9 +287,7 @@ export function Drill({ state, lines, onGrade, onDone }: Props) {
               <span className="muted small">No plan recorded for this line.</span>
             )}
             <button className="primary" onClick={nextLine}>
-              {lineIdx + 1 >= queue.length + (willRequeue ? 1 : 0)
-                ? 'Finish'
-                : 'Next puzzle'}
+              Next puzzle
             </button>
           </>
         )}

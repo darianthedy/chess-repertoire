@@ -1,5 +1,14 @@
 import { ROOT_FEN } from '../src/model/fen';
-import { buildSession, depthMap, drillableFens, dueCount, lineThrough } from '../src/model/lines';
+import {
+  canDrill,
+  depthMap,
+  drillableFens,
+  dueCount,
+  lineThrough,
+  pickLine,
+  touchRepertoire,
+} from '../src/model/lines';
+import type { DrillLine } from '../src/model/lines';
 import { makeRepertoire } from '../src/model/seed';
 import { cardKey, CORRECT, DAY, newCard, schedule, WRONG } from '../src/model/srs';
 import { addMove, tryMove } from '../src/model/tree';
@@ -84,19 +93,111 @@ const state: AppState = {
   version: 1,
   slots: [],
   repertoires: [white, black],
+  collections: [],
   cards: {},
   streak: null,
+  lastDrilled: {},
 };
 
 check('dueCount counts both repertoires', dueCount(state, NOW) === 3 + 2, `${dueCount(state, NOW)}`);
+check('a stocked repertoire is drillable', canDrill(state));
 
-const session = buildSession(state, NOW);
-check('session produced lines', session.length >= 2, `${session.length} lines`);
+// ------------------------------------------------------------- picker ------
+// A deterministic stand-in for Math.random, so weighted draws can be asserted.
+const fixed = (v: number) => () => v;
+
+check('picker returns a line', pickLine(state, NOW) !== null);
+
+// Nothing is due — every card was just reviewed far into the future — and the
+// picker must still produce puzzles: drilling is open-ended now.
+const allFresh: AppState = {
+  ...state,
+  cards: Object.fromEntries(
+    [white, black].flatMap((r) =>
+      drillableFens(r).map((f) => [
+        cardKey(r.id, f),
+        { ...newCard(NOW), interval: 30, dueAt: NOW + 30 * DAY },
+      ]),
+    ),
+  ),
+};
+check('nothing due, but drilling continues', dueCount(allFresh, NOW) === 0 && pickLine(allFresh, NOW) !== null);
+
+// Least-recently-drilled bias: white was drilled just now, black a week ago,
+// so a draw at the bottom of the weight range still lands on black.
+const lru: AppState = {
+  ...state,
+  lastDrilled: { [white.id]: NOW, [black.id]: NOW - 7 * DAY },
+};
+let blackDraws = 0;
+for (let i = 0; i < 200; i++) {
+  if (pickLine(lru, NOW, [], fixed(i / 200))?.repertoireId === black.id) blackDraws++;
+}
 check(
-  'session interleaves repertoires',
-  session.length < 2 || session[0].repertoireId !== session[1].repertoireId,
-  session.map((l) => l.repertoireId.slice(0, 4)).join(' '),
+  'the least recently drilled repertoire comes up more often',
+  blackDraws > 120,
+  `${blackDraws}/200 draws`,
 );
+check(
+  'the recently drilled one still appears',
+  blackDraws < 200,
+  `${200 - blackDraws}/200 draws`,
+);
+
+// touchRepertoire is what keeps that rotation moving during a session.
+const touched = touchRepertoire(lru, black.id, NOW);
+check('touchRepertoire records the draw', touched.lastDrilled[black.id] === NOW);
+check('touchRepertoire leaves other repertoires alone', touched.lastDrilled[white.id] === NOW);
+
+// A branching repertoire, so a draw's *target* is observable: 1.d4 d5 then
+// either 2.Nf3 (walked by default) or 2.c4, which only appears when the picker
+// aims at a position inside it.
+let branchy = makeRepertoire('slot-white', 'Branchy', 'w');
+branchy = addLine(branchy, ['d4', 'd5', 'Nf3', 'Nf6', 'Bf4']);
+const afterD5 = tryMove(tryMove(ROOT_FEN, 'd4')!, 'd5')!;
+branchy = addMove(branchy, afterD5, 'c4', '');
+const afterC4 = tryMove(afterD5, 'c4')!;
+branchy = addMove(branchy, afterC4, 'e6', '');
+const afterE6 = tryMove(afterC4, 'e6')!;
+branchy = addMove(branchy, afterE6, 'Nc3', '');
+
+const branchState: AppState = { ...state, repertoires: [branchy] };
+const inBranch = (l: DrillLine | null) => !!l && l.cardFens.includes(afterE6);
+
+// Recently drilled positions are skipped while alternatives remain.
+let branchAfterSkip = 0;
+for (let i = 0; i < 50; i++) {
+  if (inBranch(pickLine(branchState, NOW, [cardKey(branchy.id, afterE6)], fixed(i / 50)))) {
+    branchAfterSkip++;
+  }
+}
+check('recent positions are skipped when others are free', branchAfterSkip === 0, `${branchAfterSkip}/50`);
+check(
+  'the recent window never starves the picker',
+  pickLine(
+    branchState,
+    NOW,
+    drillableFens(branchy).map((f) => cardKey(branchy.id, f)),
+  ) !== null,
+);
+
+// Overdue positions outweigh well-known ones inside a repertoire.
+const skewed: AppState = {
+  ...branchState,
+  cards: Object.fromEntries(
+    drillableFens(branchy).map((f) => [
+      cardKey(branchy.id, f),
+      f === afterE6
+        ? { ...newCard(NOW), dueAt: NOW - 30 * DAY }
+        : { ...newCard(NOW), interval: 60, dueAt: NOW + 60 * DAY },
+    ]),
+  ),
+};
+let sawOverdue = 0;
+for (let i = 0; i < 200; i++) {
+  if (inBranch(pickLine(skewed, NOW, [], fixed(i / 200)))) sawOverdue++;
+}
+check('overdue positions are favoured', sawOverdue > 150, `${sawOverdue}/200`);
 
 // Parked repertoires generate nothing.
 const parked: AppState = {
@@ -104,9 +205,10 @@ const parked: AppState = {
   repertoires: [{ ...white, state: 'parked' }, { ...black, state: 'parked' }],
 };
 check('parked repertoires produce no cards', dueCount(parked, NOW) === 0);
-check('parked repertoires produce no session', buildSession(parked, NOW).length === 0);
+check('parked repertoires produce no puzzles', pickLine(parked, NOW) === null);
+check('parked repertoires are not drillable', !canDrill(parked));
 
-// Scheduled-ahead cards drop out of the queue until they come due again.
+// Scheduled-ahead cards drop out of the due count until they come round again.
 const scheduled: AppState = {
   ...state,
   cards: Object.fromEntries(
@@ -118,23 +220,6 @@ const scheduled: AppState = {
 };
 check('future-dated cards are not due', dueCount(scheduled, NOW) === 2, `${dueCount(scheduled, NOW)}`);
 check('and are due again once time passes', dueCount(scheduled, NOW + 11 * DAY) === 5);
-
-// Most-overdue-first ordering.
-const [a, b] = drillableFens(white);
-const ordered: AppState = {
-  ...state,
-  repertoires: [white],
-  cards: {
-    [cardKey(white.id, a)]: { ...newCard(NOW), dueAt: NOW - 1 * DAY },
-    [cardKey(white.id, b)]: { ...newCard(NOW), dueAt: NOW - 9 * DAY },
-  },
-};
-const orderedSession = buildSession(ordered, NOW);
-check(
-  'most-overdue card seeds the first line',
-  orderedSession.length > 0 && orderedSession[0].cardFens.includes(b),
-  `first line covers ${orderedSession[0]?.cardFens.length} cards`,
-);
 
 console.log(failures === 0 ? '\nAll drill checks passed.' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);

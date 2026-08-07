@@ -30,6 +30,7 @@ export function initialState(): AppState {
     collections: [],
     cards: {},
     streak: null,
+    lastDrilled: {},
   };
 }
 

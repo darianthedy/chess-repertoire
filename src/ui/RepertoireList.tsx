@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { defaultSideForSlot, makeRepertoire } from '../model/seed';
-import { dueCount } from '../model/lines';
+import { canDrill, dueCount } from '../model/lines';
 import { downloadJson, parseState } from '../model/storage';
 import { myPositionCount, positionCount } from '../model/tree';
 import type { AppState, Repertoire, RepertoireState, Side } from '../model/types';
@@ -23,6 +23,7 @@ export function RepertoireList({
   onReviewGames,
 }: Props) {
   const due = dueCount(state, Date.now());
+  const ready = canDrill(state);
   const [addingTo, setAddingTo] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [side, setSide] = useState<Side>('w');
@@ -110,7 +111,8 @@ export function RepertoireList({
       {importError && <p className="error">Import failed: {importError}</p>}
 
       {/* The one number that matters. No dashboards — the question is only
-          ever "did I do it today". */}
+          ever "did I do it today". The count is information, not a gate:
+          drilling starts whenever, and runs as long as it's wanted. */}
       <section className="today">
         <div>
           <strong className="today__count">{due}</strong>
@@ -118,8 +120,8 @@ export function RepertoireList({
         </div>
         <div className="row">
           <button onClick={onReviewGames}>Games</button>
-          <button className="primary" onClick={onStartSession} disabled={!due}>
-            {due ? 'Start drilling' : 'Nothing due'}
+          <button className="primary" onClick={onStartSession} disabled={!ready}>
+            {ready ? 'Start drilling' : 'Nothing to drill'}
           </button>
         </div>
       </section>

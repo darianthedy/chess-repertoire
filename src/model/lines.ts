@@ -1,8 +1,8 @@
 import { ROOT_FEN } from './fen';
 import { getNode, isMyTurn } from './tree';
 import type { PathStep } from './tree';
-import { cardKey, isDue, NEW_CARD_CAP, DAILY_CAP } from './srs';
-import type { AppState, Repertoire } from './types';
+import { cardKey, DAY, isDue } from './srs';
+import type { AppState, CardState, Repertoire } from './types';
 
 /** One puzzle: a root-to-leaf walk through a repertoire. */
 export interface DrillLine {
@@ -136,79 +136,137 @@ export function lineThrough(
 }
 
 /**
- * Assemble today's session.
+ * Weighting for one repertoire: least-recently-drilled comes up most.
  *
- * Due cards are pooled across every card-generating repertoire and drawn
- * most-overdue-first against one global cap, so adding a repertoire dilutes a
- * fixed budget rather than multiplying the daily workload. Unseen positions are
- * separately capped so a freshly entered repertoire can't crowd out reviews.
- *
- * Lines from different repertoires are then interleaved: drilling one opening
- * to exhaustion feels smoother and remembers worse.
+ * Idle time saturates after a week — past that, "ages ago" and "even longer
+ * ago" are the same thing, and letting the ratio grow without bound would make
+ * a long-untouched repertoire monopolise the session.
  */
-export function buildSession(state: AppState, now: number): DrillLine[] {
-  const active = state.repertoires.filter((r) => r.state !== 'parked');
+const IDLE_SATURATION = 7 * DAY;
 
-  const dueSeen: { rep: Repertoire; fen: string; dueAt: number }[] = [];
-  const dueNew: { rep: Repertoire; fen: string }[] = [];
+/** Floor and ceiling of the repertoire draw weight, so nothing is unreachable. */
+const MIN_REP_WEIGHT = 1;
+const MAX_REP_WEIGHT = 8;
 
-  for (const rep of active) {
-    const depths = depthMap(rep);
-    for (const fen of drillableFens(rep, depths)) {
-      const card = state.cards[cardKey(rep.id, fen)];
-      if (!card) dueNew.push({ rep, fen });
-      else if (isDue(card, now)) dueSeen.push({ rep, fen, dueAt: card.dueAt });
-    }
-  }
+/**
+ * How many recently drilled positions to keep out of the draw, so a short
+ * session doesn't loop over the same handful of puzzles.
+ */
+export const RECENT_MEMORY = 24;
 
-  dueSeen.sort((a, b) => a.dueAt - b.dueAt);
-
-  // `trial` repertoires take a reduced share of the new-card budget so an
-  // opening still being evaluated can't dominate the session.
-  const newBudget = dueNew.filter(
-    (n) => n.rep.state !== 'trial',
-  ).slice(0, NEW_CARD_CAP);
-  const trialBudget = dueNew
-    .filter((n) => n.rep.state === 'trial')
-    .slice(0, Math.floor(NEW_CARD_CAP / 3));
-
-  const targets = [
-    ...dueSeen.map((d) => ({ rep: d.rep, fen: d.fen })),
-    ...newBudget,
-    ...trialBudget,
-  ];
-
-  const covered = new Set<string>();
-  const byRep = new Map<string, DrillLine[]>();
-  let cardsQueued = 0;
-
-  for (const { rep, fen } of targets) {
-    if (cardsQueued >= DAILY_CAP) break;
-    if (covered.has(cardKey(rep.id, fen))) continue;
-
-    const line = lineThrough(rep, fen);
-    if (!line) continue;
-
-    // One line usually covers several due positions; don't queue them twice.
-    for (const f of line.cardFens) covered.add(cardKey(rep.id, f));
-    cardsQueued += line.cardFens.length;
-
-    const list = byRep.get(rep.id) ?? [];
-    list.push(line);
-    byRep.set(rep.id, list);
-  }
-
-  return interleave([...byRep.values()]);
+interface Pool {
+  rep: Repertoire;
+  weight: number;
+  fens: { fen: string; weight: number }[];
 }
 
-/** Round-robin across repertoires so consecutive puzzles differ. */
-function interleave(groups: DrillLine[][]): DrillLine[] {
-  const out: DrillLine[] = [];
-  const longest = Math.max(0, ...groups.map((g) => g.length));
-  for (let i = 0; i < longest; i++) {
-    for (const g of groups) if (g[i]) out.push(g[i]);
+/**
+ * Draw weight for one position.
+ *
+ * Unseen and overdue positions dominate, but a well-known position never drops
+ * to zero: drilling is now open-ended, so "nothing left today" isn't an answer
+ * the picker is allowed to give.
+ */
+function cardWeight(card: CardState | undefined, now: number): number {
+  if (!card) return 4;
+  if (card.dueAt <= now) {
+    return 4 + Math.min((now - card.dueAt) / DAY, 20);
+  }
+  // Not due yet: weight rises as the due date approaches, measured against the
+  // card's own interval so a 200-day card isn't treated like a 2-day one.
+  const remaining = (card.dueAt - now) / DAY;
+  const span = Math.max(card.interval, 1);
+  return Math.max(0.25, 3 * (1 - remaining / span));
+}
+
+/** Draw weight for one repertoire: idle time, halved while on trial. */
+function repWeight(rep: Repertoire, lastDrilled: number, now: number): number {
+  const idle = Math.min(Math.max(now - lastDrilled, 0), IDLE_SATURATION);
+  const w =
+    MIN_REP_WEIGHT +
+    (MAX_REP_WEIGHT - MIN_REP_WEIGHT) * (idle / IDLE_SATURATION);
+  // An opening still being evaluated shouldn't take an equal share of practice.
+  return rep.state === 'trial' ? w / 2 : w;
+}
+
+/** Every drillable position, grouped by repertoire, minus anything skipped. */
+function pools(state: AppState, now: number, skip: Set<string>): Pool[] {
+  const out: Pool[] = [];
+  for (const rep of state.repertoires) {
+    if (rep.state === 'parked') continue;
+    const fens = drillableFens(rep)
+      .filter((fen) => !skip.has(cardKey(rep.id, fen)))
+      .map((fen) => ({
+        fen,
+        weight: cardWeight(state.cards[cardKey(rep.id, fen)], now),
+      }));
+    if (!fens.length) continue;
+    out.push({
+      rep,
+      weight: repWeight(rep, state.lastDrilled[rep.id] ?? 0, now),
+      fens,
+    });
   }
   return out;
+}
+
+function weightedPick<T>(items: T[], weight: (t: T) => number, rand: () => number): T {
+  const total = items.reduce((sum, t) => sum + weight(t), 0);
+  let r = rand() * total;
+  for (const item of items) {
+    r -= weight(item);
+    if (r <= 0) return item;
+  }
+  return items[items.length - 1];
+}
+
+/**
+ * Draw the next puzzle. Endless by design — there is no session queue and no
+ * daily cap, so drilling starts whenever and runs until it's stopped.
+ *
+ * The draw is two-stage: repertoire first, then position within it. Picking
+ * across one flat list would hand the session to whichever repertoire has the
+ * most positions; picking the repertoire first is what makes the
+ * least-recently-drilled weighting mean anything.
+ */
+export function pickLine(
+  state: AppState,
+  now: number,
+  recent: string[] = [],
+  rand: () => number = Math.random,
+): DrillLine | null {
+  const skipped = pools(state, now, new Set(recent));
+  // Falling back to the full set matters for a small repertoire, where the
+  // recent window can swallow every position there is.
+  const available = skipped.length ? skipped : pools(state, now, new Set());
+  if (!available.length) return null;
+
+  const pool = weightedPick(available, (p) => p.weight, rand);
+  const target = weightedPick(pool.fens, (f) => f.weight, rand);
+  return lineThrough(pool.rep, target.fen);
+}
+
+/** Record that a repertoire was just drilled, for the recency weighting. */
+export function touchRepertoire(
+  state: AppState,
+  repertoireId: string,
+  now: number,
+): AppState {
+  return {
+    ...state,
+    lastDrilled: { ...state.lastDrilled, [repertoireId]: now },
+  };
+}
+
+/**
+ * Whether there is anything at all to drill. Not the same question as "is
+ * anything due": drilling no longer waits for due dates, so the only thing that
+ * can stop a session starting is an empty repertoire.
+ */
+export function canDrill(state: AppState): boolean {
+  return state.repertoires.some(
+    (r) => r.state !== 'parked' && drillableFens(r).length > 0,
+  );
 }
 
 /** How many cards are due right now, for the home screen. */
