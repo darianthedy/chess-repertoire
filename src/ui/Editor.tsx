@@ -33,6 +33,10 @@ export function Editor({ rep, onChange, onBack, initialPath }: Props) {
   const [path, setPath] = useState<PathStep[]>(initialPath ?? []);
   const [draftNote, setDraftNote] = useState('');
   const [editingSan, setEditingSan] = useState<string | null>(null);
+  // Defaults to the side I play here, which is right almost always — but a
+  // repertoire is also worth looking at from the opponent's side when working
+  // out why a move is annoying to face.
+  const [flipped, setFlipped] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [pgnText, setPgnText] = useState('');
   const [studyUrl, setStudyUrl] = useState('');
@@ -238,7 +242,9 @@ export function Editor({ rep, onChange, onBack, initialPath }: Props) {
         <div className="editor__board">
           <MoveBoard
             fen={fen}
-            orientation={rep.side === 'w' ? 'white' : 'black'}
+            orientation={
+              (rep.side === 'w') !== flipped ? 'white' : 'black'
+            }
             onMove={handleMove}
           />
           <div className="editor__nav">
@@ -250,6 +256,9 @@ export function Editor({ rep, onChange, onBack, initialPath }: Props) {
               disabled={!path.length}
             >
               ← Back
+            </button>
+            <button onClick={() => setFlipped((f) => !f)} title="Flip board">
+              ⇅ Flip
             </button>
           </div>
         </div>

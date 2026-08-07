@@ -1,10 +1,31 @@
 import { useCallback, useMemo, useState } from 'react';
 import { adoptLine, gameLabel, gameToTree } from '../model/collections';
 import { ROOT_FEN } from '../model/fen';
+import { parseMovetext } from '../model/pgn';
 import { getNode } from '../model/tree';
 import type { PathStep } from '../model/tree';
 import type { AppState, Repertoire, StoredGame } from '../model/types';
 import { MoveBoard } from './MoveBoard';
+
+/**
+ * Orient a collection game to the side I'd be studying it from: the colour of
+ * whichever live repertoire already answers its first move. Falls back to
+ * White when nothing matches.
+ */
+function suggestedOrientation(
+  state: AppState,
+  game: StoredGame,
+): 'white' | 'black' {
+  const first = parseMovetext(game.movetext)[0]?.san;
+  if (!first) return 'white';
+
+  for (const rep of state.repertoires) {
+    if (rep.state === 'parked') continue;
+    const plays = getNode(rep, ROOT_FEN).moves.some((m) => m.san === first);
+    if (plays) return rep.side === 'w' ? 'white' : 'black';
+  }
+  return 'white';
+}
 
 interface Props {
   state: AppState;
@@ -25,6 +46,15 @@ export function GameView({ state, game, onAdopt, onBack }: Props) {
   const [path, setPath] = useState<PathStep[]>([]);
   const [target, setTarget] = useState('');
   const [message, setMessage] = useState<string | null>(null);
+
+  /**
+   * Default to the side the game is useful from: if one of my repertoires
+   * plays this opening, orient to my colour in it. A Caro-Kann model game is
+   * being read for Black's ideas, so showing it from White is the wrong way up.
+   */
+  const [orientation, setOrientation] = useState<'white' | 'black'>(() =>
+    suggestedOrientation(state, game),
+  );
 
   const fen = path.length ? path[path.length - 1].fen : ROOT_FEN;
   const node = getNode(tree, fen);
@@ -77,8 +107,16 @@ export function GameView({ state, game, onAdopt, onBack }: Props) {
 
       <div className="editor__layout">
         <div className="editor__board">
-          <MoveBoard fen={fen} orientation="white" onMove={play} />
+          <MoveBoard fen={fen} orientation={orientation} onMove={play} />
           <div className="editor__nav">
+            <button
+              onClick={() =>
+                setOrientation((o) => (o === 'white' ? 'black' : 'white'))
+              }
+              title="Flip board"
+            >
+              ⇅ Flip
+            </button>
             <button onClick={() => setPath([])} disabled={!path.length}>
               « Start
             </button>

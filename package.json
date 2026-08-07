@@ -13,7 +13,8 @@
     "check:e2e": "node scripts/e2e-drill.mjs && node scripts/e2e-import.mjs && node scripts/e2e-games.mjs",
     "check:pwa": "npm run build && node scripts/pwa-check.mjs",
     "check:realfile": "node scripts/e2e-realfile.mjs",
-    "check:collections": "node scripts/e2e-collections.mjs"
+    "check:collections": "node scripts/e2e-collections.mjs",
+    "check:flip": "node scripts/e2e-flip.mjs"
   },
   "dependencies": {
     "chess.js": "^1.4.0",
