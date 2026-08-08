@@ -7,6 +7,7 @@
  */
 
 import { chessAt, turnOf } from './fen';
+import { bareSan } from './san';
 import { toWhitePov } from './score';
 import type { Score } from './score';
 
@@ -119,7 +120,8 @@ export function uciToSan(fen: string, uciMoves: string[]): string[] {
     try {
       const move = chess.move({ from, to, promotion });
       if (!move) break;
-      san.push(move.san);
+      // Bare, so a PV move can be matched against the book by SAN equality.
+      san.push(bareSan(move.san));
     } catch {
       break;
     }

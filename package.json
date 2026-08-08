@@ -13,7 +13,7 @@
     "preview": "vite preview",
     "check": "tsx scripts/tree-check.ts && tsx scripts/drill-check.ts && tsx scripts/pgn-check.ts && tsx scripts/deviation-check.ts && tsx scripts/engine-check.ts && tsx scripts/variations-check.ts",
     "check:mobile": "node scripts/mobile-check.mjs",
-    "check:e2e": "node scripts/e2e-drill.mjs && node scripts/e2e-import.mjs && node scripts/e2e-games.mjs && node scripts/e2e-variations.mjs && node scripts/e2e-depth.mjs && node scripts/e2e-ambiguous.mjs",
+    "check:e2e": "node scripts/e2e-drill.mjs && node scripts/e2e-checks.mjs && node scripts/e2e-import.mjs && node scripts/e2e-games.mjs && node scripts/e2e-variations.mjs && node scripts/e2e-depth.mjs && node scripts/e2e-ambiguous.mjs",
     "check:pwa": "npm run build && node scripts/pwa-check.mjs",
     "check:realfile": "node scripts/e2e-realfile.mjs",
     "check:collections": "node scripts/e2e-collections.mjs",

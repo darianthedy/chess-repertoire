@@ -1,4 +1,5 @@
 import { get, set } from 'idb-keyval';
+import { bareSan } from './san';
 import { initialState } from './seed';
 import { emptyNodes } from './tree';
 import { DEFAULT_ENGINE_SETTINGS } from './types';
@@ -117,7 +118,7 @@ function parseRepertoire(raw: unknown, index: number): Repertoire {
 
   const nodes =
     typeof o.nodes === 'object' && o.nodes !== null
-      ? (o.nodes as Repertoire['nodes'])
+      ? bareSans(o.nodes as Repertoire['nodes'])
       : emptyNodes();
 
   return {
@@ -136,6 +137,25 @@ function parseRepertoire(raw: unknown, index: number): Repertoire {
     createdAt: typeof o.createdAt === 'number' ? o.createdAt : Date.now(),
     nodes,
   };
+}
+
+/**
+ * Heal SAN written before it was canonicalised. Moves entered on the board used
+ * to be stored as chess.js spells them (`Bxf7+`) while imported PGN was stored
+ * bare, so a checking move could be unmatchable by the very move that produced
+ * it. Cheap enough to run on every load, and it keeps old exports usable.
+ */
+function bareSans(nodes: Repertoire['nodes']): Repertoire['nodes'] {
+  const healed: Repertoire['nodes'] = {};
+  for (const [fen, node] of Object.entries(nodes)) {
+    healed[fen] = {
+      ...node,
+      moves: Array.isArray(node?.moves)
+        ? node.moves.map((m) => ({ ...m, san: bareSan(m.san) }))
+        : [],
+    };
+  }
+  return healed;
 }
 
 export function exportJson(state: AppState): string {

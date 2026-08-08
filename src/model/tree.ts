@@ -1,4 +1,5 @@
 import { chessAt, normalizeFen, ROOT_FEN } from './fen';
+import { bareSan } from './san';
 import type { MoveEdge, Repertoire, TreeNode } from './types';
 
 /** A position reached along a line, with the move that led to it. */
@@ -42,9 +43,10 @@ export function tryMove(fen: string, san: string): string | null {
 export function addMove(
   rep: Repertoire,
   fromFen: string,
-  san: string,
+  rawSan: string,
   note: string,
 ): Repertoire {
+  const san = bareSan(rawSan);
   const toFen = tryMove(fromFen, san);
   if (!toFen) return rep;
 
@@ -132,9 +134,11 @@ export function promoteMove(
 export function replaceMove(
   rep: Repertoire,
   fromFen: string,
-  oldSan: string,
-  newSan: string,
+  rawOldSan: string,
+  rawNewSan: string,
 ): Repertoire {
+  const oldSan = bareSan(rawOldSan);
+  const newSan = bareSan(rawNewSan);
   const from = getNode(rep, fromFen);
   const old = from.moves.find((m) => m.san === oldSan);
   if (!old || oldSan === newSan) return rep;
