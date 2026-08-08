@@ -1,3 +1,4 @@
+import { bareSan } from './san';
 import { addMove, getNode, tryMove, updateNote } from './tree';
 import type { Repertoire } from './types';
 
@@ -114,7 +115,7 @@ function tokenize(movetext: string): Token[] {
       const san = word.replace(/^\d+\.+/, '').replace(/^\.+/, '');
       if (!san) continue;
       if (/^\d+$/.test(san)) continue;
-      tokens.push({ t: 'san', v: stripDecorations(san) });
+      tokens.push({ t: 'san', v: bareSan(san) });
     }
   }
   return tokens;
@@ -128,11 +129,6 @@ function tokenize(movetext: string): Token[] {
  */
 function stripCommands(comment: string): string {
   return comment.replace(/\[%[^\]]*\]/g, '').trim();
-}
-
-/** Drop !/?/!? annotations and the check and mate marks, which SAN matching ignores. */
-function stripDecorations(san: string): string {
-  return san.replace(/[!?]+$/, '').replace(/[+#]+$/, '');
 }
 
 /** Parse movetext into a move tree, preserving variations and comments. */

@@ -3,6 +3,7 @@ import type { Square } from 'chess.js';
 import { Chessboard } from 'react-chessboard';
 import type { PieceDropHandlerArgs, SquareHandlerArgs } from 'react-chessboard';
 import { chessAt } from '../model/fen';
+import { bareSan } from '../model/san';
 
 const SELECTED_STYLE: React.CSSProperties = {
   background: 'rgba(255, 213, 79, 0.55)',
@@ -24,7 +25,7 @@ interface Props {
   /** Normalized FEN of the position to show. */
   fen: string;
   orientation: 'white' | 'black';
-  /** Called with the SAN of a legal move. Return false to reject it. */
+  /** Called with the bare SAN of a legal move. Return false to reject it. */
   onMove: (san: string) => boolean;
   /** Squares to tint, e.g. the last move played. */
   highlights?: Record<string, React.CSSProperties>;
@@ -54,7 +55,9 @@ export function MoveBoard({ fen, orientation, onMove, highlights }: Props) {
         const move = probe.move({ from, to, promotion: 'q' });
         if (!move) return false;
         setSelected(null);
-        return onMove(move.san);
+        // chess.js decorates checks (`Bxf7+`); the model stores SAN bare, and a
+        // checking move must not read as a different move from the stored one.
+        return onMove(bareSan(move.san));
       } catch {
         // chess.js throws on illegal moves rather than returning null.
         return false;

@@ -1,7 +1,9 @@
+import { Chess } from 'chess.js';
 import { ROOT_FEN } from '../src/model/fen';
 import { importPgn, parseMovetext, splitGames, studyId } from '../src/model/pgn';
+import { bareSan } from '../src/model/san';
 import { makeRepertoire } from '../src/model/seed';
-import { getNode, positionCount, tryMove } from '../src/model/tree';
+import { addMove, getNode, positionCount, tryMove } from '../src/model/tree';
 
 let failures = 0;
 function check(label: string, cond: boolean, extra = '') {
@@ -164,6 +166,65 @@ const fromFile = gamesFromPgn(CC_DOWNLOAD);
 check('games extracted from a downloaded file', fromFile.length === 2, `${fromFile.length}`);
 check('player names carried through', fromFile.some((g) => g.white === 'darianthedy'));
 check('game link carried through', fromFile.some((g) => g.url.includes('chess.com/game')));
+
+// ------------------------------------------------- SAN canonicalisation -----
+// Regression: every checking move in this line was ungradeable. The PGN import
+// stored `Bxf7`, the board reported chess.js's `Bxf7+`, and drilling compares
+// SAN by string equality — so the only correct move was always marked wrong.
+const BIRDS =
+  '1.e4 e5 2.Nf3 Nc6 3.Bb5 Nd4 4.Nxd4 exd4 5.O-O a6 6.Bc4 b5 7.Bxf7+ Kxf7 8.Qh5+ g6 9.Qd5+';
+
+let birds = makeRepertoire('slot-e4', "Bird's Defense", 'w');
+birds = importPgn(birds, BIRDS, ROOT_FEN).rep;
+
+// Walk the line the way the board does: play it in chess.js and look each move
+// up in the tree by the SAN the board would hand to the drill.
+const walk = new Chess();
+let walkFen = ROOT_FEN;
+const unmatched: string[] = [];
+for (const parsed of parseMovetext(BIRDS)) {
+  const played = walk.move(parsed.san);
+  const boardSan = bareSan(played.san);
+  if (!getNode(birds, walkFen).moves.some((m) => m.san === boardSan)) {
+    unmatched.push(played.san);
+  }
+  walkFen = tryMove(walkFen, boardSan)!;
+}
+check('every board move matches its imported edge', unmatched.length === 0, unmatched.join(' '));
+
+// The mismatch this guards against, stated directly.
+const beforeBxf7 = new Chess();
+for (const m of ['e4', 'e5', 'Nf3', 'Nc6', 'Bb5', 'Nd4', 'Nxd4', 'exd4', 'O-O', 'a6', 'Bc4', 'b5']) {
+  beforeBxf7.move(m);
+}
+const raw = beforeBxf7.move({ from: 'c4', to: 'f7' }).san;
+check('chess.js reports the check decorated', raw === 'Bxf7+', raw);
+check('the imported edge is bare', parseMovetext(BIRDS)[12].san === 'Bxf7');
+check('bareSan bridges the two', bareSan(raw) === parseMovetext(BIRDS)[12].san);
+
+// Entering a decorated move by hand must land on the stored edge, not beside it.
+let dupes = makeRepertoire('slot-e4', 'Scholar', 'w');
+dupes = addMove(dupes, ROOT_FEN, 'e4', '');
+const afterE4Dupes = tryMove(ROOT_FEN, 'e4')!;
+dupes = addMove(dupes, afterE4Dupes, 'e5', '');
+const afterE5Dupes = tryMove(afterE4Dupes, 'e5')!;
+dupes = addMove(dupes, afterE5Dupes, 'Qh5', '');
+dupes = addMove(dupes, afterE5Dupes, 'Qh5+', '');
+check(
+  'a decorated duplicate is not stored twice',
+  getNode(dupes, afterE5Dupes).moves.length === 1,
+  sans(dupes, afterE5Dupes),
+);
+check(
+  'stored SAN is bare',
+  getNode(dupes, afterE5Dupes).moves[0].san === 'Qh5',
+  getNode(dupes, afterE5Dupes).moves[0].san,
+);
+
+check('bareSan strips check', bareSan('Bxf7+') === 'Bxf7');
+check('bareSan strips mate', bareSan('Qxf7#') === 'Qxf7');
+check('bareSan strips glyphs and check together', bareSan('Bxf7+!') === 'Bxf7');
+check('bareSan leaves a plain move alone', bareSan('O-O-O') === 'O-O-O');
 
 console.log(failures === 0 ? '\nAll PGN checks passed.' : `\n${failures} FAILURE(S)`);
 process.exit(failures === 0 ? 0 : 1);
